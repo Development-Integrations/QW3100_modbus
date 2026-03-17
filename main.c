@@ -1,6 +1,6 @@
 // compilacion cruzada
 // export PREFIX_ARM="$HOME/opt/libmodbus-arm"
-// arm-linux-gnueabihf-gcc main.c -o sensor_trident_modbus   -static   -I$PREFIX_ARM/include/modbus   $PREFIX_ARM/lib/libmodbus.a
+// arm-linux-gnueabihf-gcc main.c -o sensor_trident_modbus -static -I$PREFIX_ARM/include/modbus $PREFIX_ARM/lib/libmodbus.a
 // transferencia de binario al validador
 // scp sensor_trident_modbus root@192.168.188.39:/SD/
 
@@ -9,6 +9,8 @@
 #include <errno.h>
 #include <stdint.h>
 #include <memory.h>
+#include <sys/sysinfo.h> // Librería para el uptime
+#include <time.h>        // Librería para el timestamp real
 
 // lenght 1 for uint_16
 int sn = 21;
@@ -24,6 +26,7 @@ int Oil_Rh = 141;
 // lenght 2 for uint_16
 int SN2 = 25;
 
+/*
 typedef enum
 {
     s0Frec,
@@ -59,22 +62,87 @@ typedef enum
 } mapping_Register_Data_QW3100;
 
 int offset_Register_Data_QW3100 = 80;
-int lenght_Register_Data_QW3100 = 2;
+int lenght_Register_Data_QW3100 = 2;*/
 
+/**
+ * Genera el JSON con la estructura estricta requerida.
+ * @param data_sensor El array con los 30 floats procesados.
+ * @param output_buffer El buffer donde se guardará el string JSON.
+ */
 
+void generar_json_sensor(float *data_sensor, char *output_buffer)
+{
+    // Obtener Uptime del sistema
+    struct sysinfo s_info;
+    long uptime_real = 0;
+    if (sysinfo(&s_info) == 0)
+        uptime_real = s_info.uptime;
+
+    // Obtener Timestamp
+    long int ts_real = (long int)time(NULL);
+
+    sprintf(output_buffer,
+            "{\n"
+            "  \"name\": \"AP2200-Gateway\",\n"
+            "  \"sn\": 100234,\n"
+            "  \"fw\": \"1.20.3\",\n"
+            "  \"data\": [\n"
+            "    {\n"
+            "      \"ts\": %ld,\n"
+            "      \"type\": \"qw\",\n"
+            "      \"uptime\": %ld,\n"
+            "      \"sn\": 1,\n"
+            "      \"fwMajor\": 1,\n"
+            "      \"fwMinor\": 20,\n"
+            "      \"sweepCount\": 210,\n"
+            "      \"s0mag\": %.8f,\n"
+            "      \"s0phase\": %.8f,\n"
+            "      \"s0TempPre\": %.4f,\n"
+            "      \"s0TempPost\": %.4f,\n"
+            "      \"s1mag\": %.8f,\n"
+            "      \"s1phase\": %.8f,\n"
+            "      \"s1TempPre\": %.4f,\n"
+            "      \"s1TempPost\": %.4f,\n"
+            "      \"s2mag\": %.8f,\n"
+            "      \"s2phase\": %.8f,\n"
+            "      \"s2TempPre\": %.4f,\n"
+            "      \"s2TempPost\": %.4f,\n"
+            "      \"s3mag\": %.8f,\n"
+            "      \"s3phase\": %.8f,\n"
+            "      \"s3TempPre\": %.4f,\n"
+            "      \"s3TempPost\": %.4f,\n"
+            "      \"s4mag\": %.8f,\n"
+            "      \"s4phase\": %.8f,\n"
+            "      \"s4TempPre\": %.4f,\n"
+            "      \"s4TempPost\": %.4f,\n"
+            "      \"oilTemp\": %.4f,\n"
+            "      \"boardTemp\": 4509,\n"
+            "      \"rh\": 0\n"
+            "    }\n"
+            "  ]\n"
+            "}",
+            ts_real, uptime_real,
+            data_sensor[0], data_sensor[1], data_sensor[2], data_sensor[3],     // s0
+            data_sensor[6], data_sensor[7], data_sensor[8], data_sensor[9],     // s1
+            data_sensor[12], data_sensor[13], data_sensor[14], data_sensor[15], // s2
+            data_sensor[18], data_sensor[19], data_sensor[20], data_sensor[21], // s3
+            data_sensor[24], data_sensor[25], data_sensor[26], data_sensor[27], // s4
+            data_sensor[29]                                                     // oilTemp
+    );
+}
 
 int main()
 {
 
-    // Definición de variables de registro (Igual que en tu Go)
+    // Definición de variables de registro
     int numRegistro = 80;
-    int cantRegistros = 60; // debe ser par (obligatorio)
-    uint16_t Sweep_Results[62];   // Array para guardar los registros de 16 bits
+    int cantRegistros = 60;
+    uint16_t Sweep_Results[62]; // Array para guardar los registros de 16 bits
     uint16_t *ptrSweep_Results = Sweep_Results;
     float DataSensorEIS[30];
     uint16_t DataSensor[2];
 
-    // Configuración del puerto serial (Equivalente al RTUClientHandler)
+    // Configuración del puerto serial
     modbus_t *ctx = modbus_new_rtu("/dev/ttymxc2", 115200, 'N', 8, 1);
     if (ctx == NULL)
     {
@@ -125,7 +193,7 @@ int main()
 
     for (size_t i = 0; i < 30; i++)
     {
-        uint16_t Valor[2];                                // bufer temporal
+        uint16_t Valor[2];                                             // bufer temporal
         memcpy(Valor, ptrSweep_Results + 2 * i, 2 * sizeof(uint16_t)); // obtiene un para de registro de sensor
         // printf("Item %d: %02x%02x\n", i, Valor[0], Valor[1]);
         DataSensorEIS[i] = modbus_get_float_cdab(Valor); // libmodbus hacer el ordenamiento de formato “CD AB” a “ABCD”." y conversion de float IEEE a decimal.
@@ -139,7 +207,6 @@ int main()
     //     DataSensorEIS[i] = modbus_get_float_cdab(Valor); // libmodbus hacer el ordenamiento de formato “CD AB” a “ABCD”." y conversion de float IEEE a decimal.
     // }
 
-    
     printf("\nPrueba\n");
     for (int i = 0; i < 30; i++)
     {
@@ -147,9 +214,26 @@ int main()
         printf("Item %d: %f\n", i, DataSensorEIS[i]);
     }
 
+    // Buffer para guardar el resultado de la función
+    char json_final[5120];
 
-    
+    // Llamamos a la función pasando el array de datos y el buffer de salida
+    generar_json_sensor(DataSensorEIS, json_final);
 
+    // Guardar a archivo
+    FILE *f = fopen("/SD/sensor_data.json", "w");
+    if (f == NULL)
+    {
+        perror("Error fopen");
+        return -1;
+    }
+
+    if (fputs(json_final, f) == EOF)
+    {
+        perror("Error fputs");
+    }
+
+    fclose(f);
 
     return 0;
 }

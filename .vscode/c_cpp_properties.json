@@ -1,7 +1,7 @@
 {
     "configurations": [
         {
-            "name": "ARM",
+            "name": "CrossCompile ARM en C",
             "compilerPath": "/usr/bin/arm-linux-gnueabihf-gcc",
             "intelliSenseMode": "linux-gcc-arm",
             "cStandard": "c11",
