@@ -10,18 +10,19 @@
 #include <stdint.h>
 #include <memory.h>
 
-typedef enum
-{
-    sn,
-    BaudRate,
-    VebndorID,
-    SN1,
-    SN2,
-    fwMajor,
-    fwMinor
-} mapping_Register_Info_QW3100;
-
+// lenght 1 for uint_16
+int sn = 21;
+int BaudRate = 22;
+int VendorID = 23;
+int SN1 = 24;
+int fwMajor = 27;
+int fwMinor = 28;
 int sweepCount = 79;
+int Board_Temperature = 140;
+int Oil_Rh = 141;
+
+// lenght 2 for uint_16
+int SN2 = 25;
 
 typedef enum
 {
@@ -55,15 +56,10 @@ typedef enum
     s4TempPre,
     s4TempPost,
     s4TempPostSample,
-    oilTemp,
-    boardTemp,
-    rh
 } mapping_Register_Data_QW3100;
 
 int offset_Register_Data_QW3100 = 80;
 int lenght_Register_Data_QW3100 = 2;
-
-
 
 
 
@@ -73,9 +69,10 @@ int main()
     // Definición de variables de registro (Igual que en tu Go)
     int numRegistro = 80;
     int cantRegistros = 60; // debe ser par (obligatorio)
-    uint16_t results[60];   // Array para guardar los registros de 16 bits
-    uint16_t *ptrresult = results;
-    float item[30];
+    uint16_t Sweep_Results[62];   // Array para guardar los registros de 16 bits
+    uint16_t *ptrSweep_Results = Sweep_Results;
+    float DataSensorEIS[30];
+    uint16_t DataSensor[2];
 
     // Configuración del puerto serial (Equivalente al RTUClientHandler)
     modbus_t *ctx = modbus_new_rtu("/dev/ttymxc2", 115200, 'N', 8, 1);
@@ -101,7 +98,7 @@ int main()
 
     // Lectura de registros (client.ReadHoldingRegisters)
     // rc devuelve la cantidad de registros leídos con éxito
-    int rc = modbus_read_registers(ctx, numRegistro, cantRegistros, results);
+    int rc = modbus_read_registers(ctx, numRegistro, cantRegistros, Sweep_Results);
     if (rc == -1)
     {
         fprintf(stderr, "Error en la lectura: %s\n", modbus_strerror(errno));
@@ -114,32 +111,45 @@ int main()
     modbus_close(ctx);
     modbus_free(ctx);
 
-    // Bucle de visualización (Equivalente a tu for i := 0...)
+    /*
+    // --------- printf vervose ------------
     for (int i = 0; i < rc; i++)
     {
         int regAddr = numRegistro + i;
         // %04X muestra el registro completo de 16 bits en 4 dígitos hex
-        printf("Registro %d: %04X\n", regAddr, results[i]);
+        printf("Registro %d: %04X\n", regAddr, Sweep_Results[i]);
     }
+    */
 
     // se hacer el ordenamiento de formato “CD AB” a “ABCD”."
-    uint16_t *ptr = results;
 
     for (size_t i = 0; i < 30; i++)
     {
         uint16_t Valor[2];                                // bufer temporal
-        memcpy(Valor, ptr + 2 * i, 2 * sizeof(uint16_t)); // obtiene un para de registro de sensor
-        printf("Item %d: %02x%02x\n", i, Valor[0], Valor[1]);
-        item[i] = modbus_get_float_cdab(Valor); // libmodbus hacer el ordenamiento de formato “CD AB” a “ABCD”." y conversion de float IEEE a decimal.
+        memcpy(Valor, ptrSweep_Results + 2 * i, 2 * sizeof(uint16_t)); // obtiene un para de registro de sensor
+        // printf("Item %d: %02x%02x\n", i, Valor[0], Valor[1]);
+        DataSensorEIS[i] = modbus_get_float_cdab(Valor); // libmodbus hacer el ordenamiento de formato “CD AB” a “ABCD”." y conversion de float IEEE a decimal.
     }
 
-    printf("\nPrueba\n");
+    // for (size_t i = 0; i < 2; i++)
+    // {
+    //     uint16_t Valor[2];                                // bufer temporal
+    //     memcpy(Valor, ptrSweep_Results + 2 * i, 2 * sizeof(uint16_t)); // obtiene un para de registro de sensor
+    //     // printf("Item %d: %02x%02x\n", i, Valor[0], Valor[1]);
+    //     DataSensorEIS[i] = modbus_get_float_cdab(Valor); // libmodbus hacer el ordenamiento de formato “CD AB” a “ABCD”." y conversion de float IEEE a decimal.
+    // }
 
+    
+    printf("\nPrueba\n");
     for (int i = 0; i < 30; i++)
     {
         // %04X muestra el registro completo de 16 bits en 4 dígitos hex
-        printf("Item %d: %f\n", i, item[i]);
+        printf("Item %d: %f\n", i, DataSensorEIS[i]);
     }
+
+
+    
+
 
     return 0;
 }
