@@ -7,14 +7,32 @@
             "cStandard": "c11",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/home/laboratorio/opt/libmodbus-arm/include",
-                "/home/laboratorio/opt/libmodbus-arm/include/modbus"
+                "/home/nesas-10/opt/libmodbus-arm/include", // Modificar la ruta de la librería libmodbus-arm
+                "/home/nesas-10/opt/libmodbus-arm/include/modbus" // Modificar la ruta de la librería libmodbus-arm
             ],
             "defines": [],
             "browse": {
                 "path": [
                     "${workspaceFolder}",
-                    "/home/laboratorio/opt/libmodbus-arm/include"
+                    "/home/nesas-10/opt/libmodbus-arm/include" // Modificar la ruta de la librería libmodbus-arm
+                ]
+            }
+        },
+        {
+            "name": "Compile Native in C",
+            "compilerPath": "/usr/bin/gcc",
+            "intelliSenseMode": "linux-gcc-x64",
+            "cStandard": "c11",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/nesas-10/opt/libmodbus-native/include", // Modificar la ruta de la librería libmodbus-native
+                "/home/nesas-10/opt/libmodbus-native/include/modbus" // Modificar la ruta de la librería libmodbus-native
+            ],
+            "defines": [],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "/home/nesas-10/opt/libmodbus-native/include" // Modificar la ruta de la librería libmodbus-native
                 ]
             }
         }
