@@ -9,5 +9,5 @@ arm-linux-gnueabihf-gcc main.c -o sensor_trident_modbus_ARM -static -I$PREFIX_AR
 export PREFIX_NATIVE="$HOME/opt/libmodbus-native"
 gcc main.c -o sensor_trident_modbus_NATIVE -static -I$PREFIX_NATIVE/include/modbus $PREFIX_NATIVE/lib/libmodbus.a
 
-## transferencia de binario al validador
-scp sensor_trident_modbus root@192.168.188.39:/SD/
+## transferencia de binario al validador de pruebas
+scp -P 2122 sensor_trident_modbus_ARM root@192.168.188.39:/SD/
