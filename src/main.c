@@ -12,13 +12,18 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-// #include "../lib/cJSON.h"
+#include "../lib/cJSON.h"
 #include "sensor.h"
 #include "modbus_comm.h"
 
-#define TIME_POLLING_INTERVAL_DEFAULT 5 // Intervalo de tiempo en segundos para la lectura periódica de datos del sensor
+#define TIME_POLLING_INTERVAL_DEFAULT 120 // Intervalo de tiempo en segundos para la lectura periódica de datos del sensor
 
 const int REMOTE_ID = 1;
+static const GatewayInfo gateway_info = {
+    "AP2200-Gateway",
+    100234,
+    "1.20.3"
+};
 
 static int parse_interval_arg(int argc, char *argv[], uint16_t *interval_sec)
 {
@@ -78,7 +83,9 @@ int main(int argc, char *argv[])
     modbus_t *ctx; // Contexto de comunicación Modbus encapsulado y oculto en la libreria
 
     char time_str[26];
-    char buffer[64];
+    // char buffer[64];
+    SensorSnapshot snapshot;
+    char *payload_json;
 
     ctx = modbus_new_rtu("/dev/ttymxc2", 115200, 'N', 8, 1);
     if (ctx == NULL)
@@ -143,12 +150,31 @@ int main(int argc, char *argv[])
         strftime(time_str, 26, "%Y-%m-%d %H:%M:%S", tm_info);
         printf("Current time: %s ", time_str);
 
-        for (size_t i = 0; i < dataSensor_count; i++)
+        // // Reporta los valores de los sensores en cada iteración
+        // for (size_t i = 0; i < dataSensor_count; i++)
+        // {
+        //     print_sensor_test_polling(&dataSensor[i], buffer, sizeof(buffer));
+        //     printf("|%s", buffer);
+        // }
+        // printf("|\n");
+
+        if (build_sensor_snapshot(dataSensor, dataSensor_count, now, &snapshot) == 0)
         {
-            print_sensor_test_polling(&dataSensor[i], buffer, sizeof(buffer));
-            printf("|%s", buffer);
+            payload_json = build_gateway_payload_json(&gateway_info, &snapshot);
+            if (payload_json != NULL)
+            {
+                printf("%s\n", payload_json);
+                cJSON_free(payload_json);
+            }
+            else
+            {
+                fprintf(stderr, "No se pudo serializar snapshot a JSON\n");
+            }
         }
-        printf("|\n");
+        else
+        {
+            fprintf(stderr, "No se pudo construir snapshot del sensor\n");
+        }
 
         sleep(time_polling_interval);
     }

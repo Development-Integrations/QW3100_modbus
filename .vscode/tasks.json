@@ -43,7 +43,9 @@
                 "-p",
                 "2122",
                 "root@192.168.188.39",
-                "/SD/sensor_trident_modbus_ARM"
+                "/SD/sensor_trident_modbus_ARM",
+                "--interval",
+                "5"
             ],
             "dependsOn": "2. Enviar por SCP",
             "problemMatcher": [],

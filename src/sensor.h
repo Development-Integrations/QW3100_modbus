@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <time.h>
 
 #define REGISTER_SENSOR_INFO_SIZE  12
 #define REGISTER_SENSOR_DATA_SIZE  63
@@ -79,13 +80,68 @@ typedef enum
     Oil_RH
 } SensorDataType;
 
+typedef struct
+{
+    char     name[32];   /* "AP2200-Gateway" */
+    uint32_t sn;         /* serial del gateway */
+    char     fw[16];     /* "1.20.3" */
+} GatewayInfo;
+
+typedef struct
+{
+    uint32_t ts;         /* epoch seconds */
+    char     type[8];    /* "<qm/qw>" */
+    uint32_t uptime;     /* segundos */
+    uint32_t sn;         /* serial del sensor */
+
+    uint16_t fwMajor;
+    uint16_t fwMinor;
+
+    uint16_t sweepCount;
+
+    float s0mag;
+    float s0phase;
+    float s0TempPre;
+    float s0TempPost;
+
+    float s1mag;
+    float s1phase;
+    float s1TempPre;
+    float s1TempPost;
+
+    float s2mag;
+    float s2phase;
+    float s2TempPre;
+    float s2TempPost;
+
+    float s3mag;
+    float s3phase;
+    float s3TempPre;
+    float s3TempPost;
+
+    float s4mag;
+    float s4phase;
+    float s4TempPre;
+    float s4TempPost;
+
+    float oilTemp;       /* regla sugerida: = s4TempPost */
+    uint16_t boardTemp;  /* crudo como en tu ejemplo (4509) */
+    uint16_t rh;         /* crudo como en tu ejemplo (0) */
+} SensorSnapshot;
+
 extern DataSensor    dataSensor[];
 extern const size_t  dataSensor_count;
 
 uint8_t  value_set(DataSensor *sensor, const uint16_t *src);
 void     print_sensor_test_polling(const DataSensor *sensor, char *buffer, size_t buffer_size);
+
+// Funciones (getter) para obtener los valores de los sensores
 uint32_t get_uint32_value(const DataSensor *sensor);
 uint16_t get_uint16_value(const DataSensor *sensor);
 float    get_float_value(const DataSensor *sensor);
+
+// Funciones para construir el snapshot y el payload JSON
+int build_sensor_snapshot(const DataSensor *src, size_t n, time_t now, SensorSnapshot *out);
+char *build_gateway_payload_json(const GatewayInfo *gw, const SensorSnapshot *snap);
 
 #endif /* SENSOR_H */
