@@ -8,6 +8,7 @@
 #include <time.h>
 #include "../src/sensor.h"
 #include "../src/modbus_comm.h"
+#include "../src/config.h"
 
 // Datos de prueba: registros de información del sensor
 static const uint16_t register_sensor_info[] = {
@@ -92,6 +93,115 @@ static void test_data_types(void)
     printf("Total sensors: %zu\n", dataSensor_count);
 }
 
+static int tests_passed = 0;
+static int tests_failed = 0;
+
+#define ASSERT(cond, msg) \
+    do { \
+        if (cond) { printf("  [OK] %s\n", msg); tests_passed++; } \
+        else      { printf("  [FAIL] %s\n", msg); tests_failed++; } \
+    } while (0)
+
+static void test_config_defaults(void)
+{
+    printf("\n=== TEST: Config Defaults ===\n");
+    AppConfig cfg;
+    config_init(&cfg);
+
+    ASSERT(cfg.interval_sec == CONFIG_DEFAULT_INTERVAL_SEC, "intervalo por defecto = 120");
+    ASSERT(strcmp(cfg.config_path, CONFIG_DEFAULT_PATH) == 0, "ruta por defecto = /SD/qw3100-config.json");
+}
+
+static void test_config_cli_override(void)
+{
+    printf("\n=== TEST: Config CLI Override ===\n");
+    AppConfig cfg;
+    config_init(&cfg);
+
+    /* Simular: --interval 30 */
+    char *argv_interval[] = {"prog", "--interval", "30"};
+    int rc = config_apply_cli(&cfg, 3, argv_interval);
+    ASSERT(rc == 0, "--interval 30 aceptaé");
+    ASSERT(cfg.interval_sec == 30, "intervalo = 30 tras CLI");
+
+    /* Simular: --interval 65535 (máximo válido) */
+    config_init(&cfg);
+    char *argv_max[] = {"prog", "--interval", "65535"};
+    rc = config_apply_cli(&cfg, 3, argv_max);
+    ASSERT(rc == 0, "--interval 65535 aceptado");
+    ASSERT(cfg.interval_sec == 65535, "intervalo = 65535 (max)");
+
+    /* Simular: -i 10 (alias corto) */
+    config_init(&cfg);
+    char *argv_short[] = {"prog", "-i", "10"};
+    rc = config_apply_cli(&cfg, 3, argv_short);
+    ASSERT(rc == 0, "-i 10 aceptado");
+    ASSERT(cfg.interval_sec == 10, "intervalo = 10 con alias -i");
+}
+
+static void test_config_cli_invalid(void)
+{
+    printf("\n=== TEST: Config CLI Valores Inválidos ===\n");
+    AppConfig cfg;
+
+    /* Valor 0 (fuera de rango) */
+    config_init(&cfg);
+    char *argv_zero[] = {"prog", "--interval", "0"};
+    int rc = config_apply_cli(&cfg, 3, argv_zero);
+    ASSERT(rc == -1, "--interval 0 rechazado");
+    ASSERT(cfg.interval_sec == CONFIG_DEFAULT_INTERVAL_SEC, "intervalo no cambiado tras error");
+
+    /* Valor 65536 (fuera de rango) */
+    config_init(&cfg);
+    char *argv_over[] = {"prog", "--interval", "65536"};
+    rc = config_apply_cli(&cfg, 3, argv_over);
+    ASSERT(rc == -1, "--interval 65536 rechazado");
+
+    /* Texto (tipo incorrecto) */
+    config_init(&cfg);
+    char *argv_str[] = {"prog", "--interval", "abc"};
+    rc = config_apply_cli(&cfg, 3, argv_str);
+    ASSERT(rc == -1, "--interval abc rechazado");
+
+    /* Sin valor */
+    config_init(&cfg);
+    char *argv_noval[] = {"prog", "--interval"};
+    rc = config_apply_cli(&cfg, 2, argv_noval);
+    ASSERT(rc == -1, "--interval sin valor rechazado");
+}
+
+static void test_config_file_not_found(void)
+{
+    printf("\n=== TEST: Config Archivo No Encontrado ===\n");
+    AppConfig cfg;
+    config_init(&cfg);
+
+    /* Forzar ruta inexistente */
+    strncpy(cfg.config_path, "/tmp/qw3100_nonexistent_test.json",
+            sizeof(cfg.config_path) - 1);
+
+    ConfigFileResult r = config_load_file(&cfg);
+    ASSERT(r == CONFIG_FILE_NOT_FOUND, "retorna NOT_FOUND si archivo no existe");
+    ASSERT(cfg.interval_sec == CONFIG_DEFAULT_INTERVAL_SEC,
+           "intervalo conserva defaults cuando no hay archivo");
+}
+
+static void test_config_precedence(void)
+{
+    printf("\n=== TEST: Precedencia CLI > Archivo ===\n");
+    AppConfig cfg;
+    config_init(&cfg);
+
+    /* Simular que el archivo estableció 60 */
+    cfg.interval_sec = 60;
+
+    /* Ahora CLI sobreescribe con 15 */
+    char *argv_cli[] = {"prog", "--interval", "15"};
+    int rc = config_apply_cli(&cfg, 3, argv_cli);
+    ASSERT(rc == 0, "CLI aplicado sobre valor de archivo");
+    ASSERT(cfg.interval_sec == 15, "CLI (15) gana sobre archivo (60)");
+}
+
 int main(void)
 {
     printf("=================================\n");
@@ -100,12 +210,17 @@ int main(void)
     
     test_data_types();
     test_sensor_data_parsing();
+    test_config_defaults();
+    test_config_cli_override();
+    test_config_cli_invalid();
+    test_config_file_not_found();
+    test_config_precedence();
     
     printf("\n=================================\n");
-    printf("Tests completed successfully\n");
+    printf("Resultados: %d OK  /  %d FAIL\n", tests_passed, tests_failed);
     printf("=================================\n");
     
-    return 0;
+    return (tests_failed == 0) ? 0 : 1;
 
     //snapshot de datos JSON esperado para referencia
 }

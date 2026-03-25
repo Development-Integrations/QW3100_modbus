@@ -1,6 +1,6 @@
 // compilacion cruzada
 // export PREFIX_ARM="$HOME/opt/libmodbus-arm"
-// arm-linux-gnueabihf-gcc ./src/main.c ./src/sensor.c ./src/modbus_comm.c ./lib/cJSON.c -o sensor_trident_modbus_ARM -static -Wall -Wextra -I$PREFIX_ARM/include/modbus $PREFIX_ARM/lib/libmodbus.a
+// arm-linux-gnueabihf-gcc ./src/main.c ./src/sensor.c ./src/modbus_comm.c ./src/config.c ./lib/cJSON.c -o sensor_trident_modbus_ARM -static -Wall -Wextra -I$PREFIX_ARM/include/modbus $PREFIX_ARM/lib/libmodbus.a
 // transferencia de binario al validador
 // scp -P 2122 sensor_trident_modbus_ARM  root@192.168.188.39:/SD/
 
@@ -15,8 +15,7 @@
 #include "../lib/cJSON.h"
 #include "sensor.h"
 #include "modbus_comm.h"
-
-#define TIME_POLLING_INTERVAL_DEFAULT 120 // Intervalo de tiempo en segundos para la lectura periódica de datos del sensor
+#include "config.h"
 
 const int REMOTE_ID = 1;
 static const GatewayInfo gateway_info = {
@@ -25,55 +24,47 @@ static const GatewayInfo gateway_info = {
     "1.20.3"
 };
 
-static int parse_interval_arg(int argc, char *argv[], uint16_t *interval_sec)
+/*
+ * Preflight: recorre argv buscando --config/-c para establecer la ruta
+ * del archivo de configuración antes de cargarlo.
+ * El resto de args se procesan después por config_apply_cli().
+ */
+static void preflight_config_path(AppConfig *cfg, int argc, char *argv[])
 {
     int i;
-
-    *interval_sec = TIME_POLLING_INTERVAL_DEFAULT;
-
     for (i = 1; i < argc; i++)
     {
-        if ((strcmp(argv[i], "--interval") == 0) || (strcmp(argv[i], "-i") == 0))
+        if ((strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "-c") == 0) &&
+            (i + 1) < argc)
         {
-            char *endptr = NULL;
-            long value;
-
-            if ((i + 1) >= argc)
-            {
-                fprintf(stderr, "Falta valor para %s\n", argv[i]);
-                return -1;
-            }
-
-            errno = 0;
-            value = strtol(argv[i + 1], &endptr, 10);
-
-            if ((errno != 0) || (endptr == argv[i + 1]) || (*endptr != '\0') || (value <= 0) || (value > 65535))
-            {
-                fprintf(stderr, "Valor invalido para --interval: %s\n", argv[i + 1]);
-                return -1;
-            }
-
-            *interval_sec = (uint16_t)value;
-            i++; /* Consumimos el valor */
-        }
-        else
-        {
-            fprintf(stderr, "Argumento no reconocido: %s\n", argv[i]);
-            return -1;
+            strncpy(cfg->config_path, argv[i + 1], sizeof(cfg->config_path) - 1);
+            cfg->config_path[sizeof(cfg->config_path) - 1] = '\0';
+            return;
         }
     }
-
-    return 0;
 }
 
 int main(int argc, char *argv[])
 {
-    uint16_t time_polling_interval;
-    if (parse_interval_arg(argc, argv, &time_polling_interval) != 0)
+    AppConfig cfg;
+    config_init(&cfg);                          /* 1. defaults */
+    preflight_config_path(&cfg, argc, argv);    /* 2. detectar --config antes de leer */
+
+    ConfigFileResult file_result = config_load_file(&cfg); /* 3. archivo JSON */
+    if (file_result == CONFIG_FILE_INVALID_JSON ||
+        file_result == CONFIG_FILE_INVALID_VALUE)
     {
-        fprintf(stderr, "Uso: %s [--interval <segundos>]\n", argv[0]);
+        fprintf(stderr, "Uso: %s [--interval <s>] [--config <ruta>]\n", argv[0]);
         return -1;
     }
+
+    if (config_apply_cli(&cfg, argc, argv) != 0) /* 4. overrides CLI */
+    {
+        fprintf(stderr, "Uso: %s [--interval <s>] [--config <ruta>]\n", argv[0]);
+        return -1;
+    }
+
+    config_print(&cfg);
 
     uint16_t register_sensor_info[REGISTER_SENSOR_INFO_SIZE];
     uint16_t register_sensor_Data[REGISTER_SENSOR_DATA_SIZE];
@@ -176,7 +167,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "No se pudo construir snapshot del sensor\n");
         }
 
-        sleep(time_polling_interval);
+        sleep(cfg.interval_sec);
     }
 
     return 0;

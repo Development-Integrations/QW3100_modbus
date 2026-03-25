@@ -9,6 +9,7 @@
                 "./src/main.c",
                 "./src/sensor.c",
                 "./src/modbus_comm.c",
+                "./src/config.c",
                 "./lib/cJSON.c",
                 "-o",
                 "sensor_trident_modbus_ARM",
@@ -27,7 +28,7 @@
                 "-P",
                 "2122",
                 "sensor_trident_modbus_ARM",
-                "root@192.168.188.39:/SD/"
+                "root@192.168.188.29:/SD/"
             ],
             "dependsOn": "1. Compilar ARM"
         },
@@ -64,6 +65,9 @@
             "command": "gcc",
             "args": [
                 "./test/main_test.c",
+                "./src/sensor.c",
+                "./src/modbus_comm.c",
+                "./src/config.c",
                 "./lib/cJSON.c",
                 "-o",
                 "./test/main_test",
