@@ -11,6 +11,7 @@
 #include "../src/modbus_comm.h"
 #include "../src/config.h"
 #include "../src/persist.h"
+#include "../src/http_sender.h"
 
 // Datos de prueba: registros de información del sensor
 static const uint16_t register_sensor_info[] = {
@@ -284,6 +285,64 @@ static void test_persist_write(void)
     rmdir(dir);
 }
 
+static void test_config_api_defaults(void)
+{
+    printf("\n=== TEST: Config api defaults ===\n");
+    AppConfig cfg;
+    config_init(&cfg);
+    ASSERT(cfg.api.enabled == 0,          "api.enabled = false por defecto");
+    ASSERT(cfg.api.base_url[0] == '\0',   "api.base_url vacío por defecto");
+    ASSERT(cfg.api.scante_token[0] == '\0', "api.scante_token vacío por defecto");
+}
+
+static void test_config_api_from_file(void)
+{
+    printf("\n=== TEST: Config api desde archivo ===\n");
+
+    const char *tmp = "/tmp/qw3100_test_api.json";
+    FILE *f = fopen(tmp, "w");
+    if (f == NULL) { printf("  [SKIP] No se pudo crear archivo temporal\n"); return; }
+    fprintf(f,
+        "{"
+        "\"api\":{"
+          "\"enabled\":true,"
+          "\"base_url\":\"http://localhost:8080/IOTData\","
+          "\"item_guid\":\"guid-item\","
+          "\"pull_type_guid\":\"guid-pull\","
+          "\"scante_token\":\"tok123\","
+          "\"scante_appid\":\"app456\","
+          "\"scante_sgid\":\"sgid789\""
+        "}"
+        "}");
+    fclose(f);
+
+    AppConfig cfg;
+    config_init(&cfg);
+    strncpy(cfg.config_path, tmp, sizeof(cfg.config_path) - 1);
+    ConfigFileResult r = config_load_file(&cfg);
+
+    ASSERT(r == CONFIG_FILE_OK,                                   "api JSON leído OK");
+    ASSERT(cfg.api.enabled == 1,                                  "api.enabled = true");
+    ASSERT(strcmp(cfg.api.base_url, "http://localhost:8080/IOTData") == 0, "api.base_url correcto");
+    ASSERT(strcmp(cfg.api.item_guid, "guid-item") == 0,          "api.item_guid correcto");
+    ASSERT(strcmp(cfg.api.scante_token, "tok123") == 0,          "api.scante_token correcto");
+    ASSERT(strcmp(cfg.api.scante_appid, "app456") == 0,          "api.scante_appid correcto");
+    ASSERT(strcmp(cfg.api.scante_sgid,  "sgid789") == 0,         "api.scante_sgid correcto");
+
+    remove(tmp);
+}
+
+static void test_http_post_disabled(void)
+{
+    printf("\n=== TEST: http_post deshabilitado ===\n");
+    HttpConfig hcfg;
+    memset(&hcfg, 0, sizeof(hcfg));
+    hcfg.enabled = 0;
+
+    HttpResult res = http_post(&hcfg, "{\"test\":true}");
+    ASSERT(res == HTTP_DISABLED, "http_post retorna HTTP_DISABLED cuando enabled=0");
+}
+
 int main(void)
 {
     printf("=================================\n");
@@ -300,6 +359,9 @@ int main(void)
     test_config_precedence();
     test_config_persist_path_default();
     test_persist_write();
+    test_config_api_defaults();
+    test_config_api_from_file();
+    test_http_post_disabled();
     
     printf("\n=================================\n");
     printf("Resultados: %d OK  /  %d FAIL\n", tests_passed, tests_failed);

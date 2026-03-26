@@ -11,11 +11,14 @@
                 "./src/modbus_comm.c",
                 "./src/config.c",
                 "./src/persist.c",
+                "./src/http_sender.c",
                 "./lib/cJSON.c",
                 "-o", "sensor_trident_modbus_ARM",
-                "-static", "-Wall", "-Wextra",
+                "-Wall", "-Wextra",
                 "-I${env:HOME}/opt/libmodbus-arm/include/modbus",
-                "${env:HOME}/opt/libmodbus-arm/lib/libmodbus.a"
+                "-I/usr/include/arm-linux-gnueabihf",
+                "${env:HOME}/opt/libmodbus-arm/lib/libmodbus.a",
+                "-L/usr/lib/arm-linux-gnueabihf", "-lcurl"
             ],
             "problemMatcher": ["$gcc"],
             "presentation": {
@@ -67,11 +70,14 @@
                 "./src/modbus_comm.c",
                 "./src/config.c",
                 "./src/persist.c",
+                "./src/http_sender.c",
                 "./lib/cJSON.c",
                 "-o", "./test/main_test",
                 "-g", "-O0", "-Wall", "-Wextra",
                 "-I${env:HOME}/opt/libmodbus-native/include/modbus",
-                "${env:HOME}/opt/libmodbus-native/lib/libmodbus.a"
+                "-I/usr/include/aarch64-linux-gnu",
+                "${env:HOME}/opt/libmodbus-native/lib/libmodbus.a",
+                "-lcurl"
             ],
             "problemMatcher": ["$gcc"],
             "group": {

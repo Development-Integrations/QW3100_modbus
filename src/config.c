@@ -58,6 +58,15 @@ void config_init(AppConfig *cfg)
     cfg->slave_id = CONFIG_DEFAULT_SLAVE_ID;
     strncpy(cfg->persist_path, CONFIG_DEFAULT_PERSIST_PATH, sizeof(cfg->persist_path) - 1);
     cfg->persist_path[sizeof(cfg->persist_path) - 1] = '\0';
+
+    /* API defaults: deshabilitada, campos vacíos */
+    cfg->api.enabled = 0;
+    cfg->api.base_url[0]        = '\0';
+    cfg->api.item_guid[0]       = '\0';
+    cfg->api.pull_type_guid[0]  = '\0';
+    cfg->api.scante_token[0]    = '\0';
+    cfg->api.scante_appid[0]    = '\0';
+    cfg->api.scante_sgid[0]     = '\0';
 }
 
 ConfigFileResult config_load_file(AppConfig *cfg)
@@ -156,6 +165,32 @@ ConfigFileResult config_load_file(AppConfig *cfg)
         cfg->persist_path[sizeof(cfg->persist_path) - 1] = '\0';
     }
 
+    /* Leer objeto "api" si existe */
+    cJSON *api = cJSON_GetObjectItemCaseSensitive(root, "api");
+    if (api != NULL)
+    {
+        cJSON *enabled = cJSON_GetObjectItemCaseSensitive(api, "enabled");
+        if (cJSON_IsBool(enabled))
+            cfg->api.enabled = cJSON_IsTrue(enabled) ? 1 : 0;
+
+#define PARSE_STR(key, field) \
+    do { \
+        cJSON *_it = cJSON_GetObjectItemCaseSensitive(api, key); \
+        if (cJSON_IsString(_it) && _it->valuestring) { \
+            strncpy(cfg->api.field, _it->valuestring, sizeof(cfg->api.field) - 1); \
+            cfg->api.field[sizeof(cfg->api.field) - 1] = '\0'; \
+        } \
+    } while (0)
+
+        PARSE_STR("base_url",       base_url);
+        PARSE_STR("item_guid",      item_guid);
+        PARSE_STR("pull_type_guid", pull_type_guid);
+        PARSE_STR("scante_token",   scante_token);
+        PARSE_STR("scante_appid",   scante_appid);
+        PARSE_STR("scante_sgid",    scante_sgid);
+#undef PARSE_STR
+    }
+
     cJSON_Delete(root);
     return CONFIG_FILE_OK;
 }
@@ -210,4 +245,7 @@ void config_print(const AppConfig *cfg)
     printf("[config] serial_port  : %s\n",   cfg->serial_port);
     printf("[config] slave_id     : %u\n",   cfg->slave_id);
     printf("[config] persist_path : %s\n",   cfg->persist_path);
+    printf("[config] api.enabled  : %s\n",   cfg->api.enabled ? "true" : "false");
+    if (cfg->api.enabled)
+        printf("[config] api.base_url : %s\n", cfg->api.base_url);
 }

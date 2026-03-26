@@ -2,6 +2,7 @@
 #define CONFIG_H
 
 #include <stdint.h>
+#include "http_sender.h"
 
 #define CONFIG_DEFAULT_INTERVAL_SEC   120
 #define CONFIG_DEFAULT_PATH           "/SD/qw3100-config.json"
@@ -29,6 +30,7 @@ typedef struct
     char     serial_port[64];  /* Puerto serial Modbus RTU (ej: /dev/ttymxc2) */
     uint8_t  slave_id;         /* Modbus slave ID del sensor (1..247) */
     char     persist_path[128]; /* Directorio donde guardar JSON pendientes */
+    HttpConfig api;             /* Configuración HTTP POST a API Scante */
 } AppConfig;
 
 /*
