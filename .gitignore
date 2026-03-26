@@ -1,4 +1,12 @@
 .env
 *.o
+
+# Binarios compilados
 sensor_trident_modbus_ARM
+test/main_test
 main_test
+
+# Dependencias externas compiladas (no se versionan)
+lib/curl/
+lib/libmodbus/
+lib/vcpkg/

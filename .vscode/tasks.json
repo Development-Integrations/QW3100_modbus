@@ -14,11 +14,12 @@
                 "./src/http_sender.c",
                 "./lib/cJSON.c",
                 "-o", "sensor_trident_modbus_ARM",
+                "-static",
                 "-Wall", "-Wextra",
-                "-I${env:HOME}/opt/libmodbus-arm/include/modbus",
-                "-I/usr/include/arm-linux-gnueabihf",
-                "${env:HOME}/opt/libmodbus-arm/lib/libmodbus.a",
-                "-L/usr/lib/arm-linux-gnueabihf", "-lcurl"
+                "-I/home/nesas-10/opt/libmodbus-arm/include/modbus",
+                "-I/home/nesas-10/opt/libcurl-arm/include",
+                "/home/nesas-10/opt/libmodbus-arm/lib/libmodbus.a",
+                "/home/nesas-10/opt/libcurl-arm/lib/libcurl.a"
             ],
             "problemMatcher": ["$gcc"],
             "presentation": {
@@ -74,9 +75,9 @@
                 "./lib/cJSON.c",
                 "-o", "./test/main_test",
                 "-g", "-O0", "-Wall", "-Wextra",
-                "-I${env:HOME}/opt/libmodbus-native/include/modbus",
-                "-I/usr/include/aarch64-linux-gnu",
-                "${env:HOME}/opt/libmodbus-native/lib/libmodbus.a",
+                "-I/home/nesas-10/opt/libmodbus-native/include/modbus",
+                "-I/usr/include/x86_64-linux-gnu",
+                "/home/nesas-10/opt/libmodbus-native/lib/libmodbus.a",
                 "-lcurl"
             ],
             "problemMatcher": ["$gcc"],

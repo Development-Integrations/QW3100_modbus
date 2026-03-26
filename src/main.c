@@ -1,8 +1,19 @@
-// compilacion cruzada
-// export PREFIX_ARM="$HOME/opt/libmodbus-arm"
-// arm-linux-gnueabihf-gcc ./src/main.c ./src/sensor.c ./src/modbus_comm.c ./src/config.c ./lib/cJSON.c -o sensor_trident_modbus_ARM -static -Wall -Wextra -I$PREFIX_ARM/include/modbus $PREFIX_ARM/lib/libmodbus.a
-// transferencia de binario al validador
-// scp -P 2122 sensor_trident_modbus_ARM  root@192.168.188.39:/SD/
+/*
+    compilacion cruzada
+    export PREFIX_ARM="$HOME/opt/libmodbus-arm"
+    export PREFIX_CURL_ARM="$HOME/opt/libcurl-arm"
+    arm-linux-gnueabihf-gcc ./src/main.c ./src/sensor.c ./src/modbus_comm.c ./src/config.c ./src/persist.c ./src/http_sender.c ./lib/cJSON.c \
+    -o sensor_trident_modbus_ARM \
+    -static \
+    -Wall -Wextra \
+    -I$PREFIX_ARM/include/modbus \
+    -I$PREFIX_CURL_ARM/include \
+    $PREFIX_ARM/lib/libmodbus.a \
+    $PREFIX_CURL_ARM/lib/libcurl.a
+    transferencia de binario al validador
+    scp -P 2122 sensor_trident_modbus_ARM  root@192.168.188.29:/SD/
+
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
