@@ -1,0 +1,6 @@
+{
+    "interval_sec": 120,
+    "serial_port": "/dev/ttymxc2",
+    "slave_id": 1,
+    "persist_path": "/SD/pending"
+}

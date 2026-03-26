@@ -56,6 +56,8 @@ void config_init(AppConfig *cfg)
     strncpy(cfg->serial_port, CONFIG_DEFAULT_SERIAL_PORT, sizeof(cfg->serial_port) - 1);
     cfg->serial_port[sizeof(cfg->serial_port) - 1] = '\0';
     cfg->slave_id = CONFIG_DEFAULT_SLAVE_ID;
+    strncpy(cfg->persist_path, CONFIG_DEFAULT_PERSIST_PATH, sizeof(cfg->persist_path) - 1);
+    cfg->persist_path[sizeof(cfg->persist_path) - 1] = '\0';
 }
 
 ConfigFileResult config_load_file(AppConfig *cfg)
@@ -140,6 +142,20 @@ ConfigFileResult config_load_file(AppConfig *cfg)
         cfg->slave_id = (uint8_t)val;
     }
 
+    /* Leer "persist_path" si existe */
+    cJSON *persist_item = cJSON_GetObjectItemCaseSensitive(root, "persist_path");
+    if (persist_item != NULL)
+    {
+        if (!cJSON_IsString(persist_item) || persist_item->valuestring == NULL)
+        {
+            fprintf(stderr, "[config] 'persist_path' debe ser una cadena\n");
+            cJSON_Delete(root);
+            return CONFIG_FILE_INVALID_VALUE;
+        }
+        strncpy(cfg->persist_path, persist_item->valuestring, sizeof(cfg->persist_path) - 1);
+        cfg->persist_path[sizeof(cfg->persist_path) - 1] = '\0';
+    }
+
     cJSON_Delete(root);
     return CONFIG_FILE_OK;
 }
@@ -193,4 +209,5 @@ void config_print(const AppConfig *cfg)
     printf("[config] config_path  : %s\n",   cfg->config_path);
     printf("[config] serial_port  : %s\n",   cfg->serial_port);
     printf("[config] slave_id     : %u\n",   cfg->slave_id);
+    printf("[config] persist_path : %s\n",   cfg->persist_path);
 }

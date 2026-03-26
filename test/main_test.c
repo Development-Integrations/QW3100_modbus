@@ -6,9 +6,11 @@
 #include <limits.h>
 #include <float.h>
 #include <time.h>
+#include <unistd.h>
 #include "../src/sensor.h"
 #include "../src/modbus_comm.h"
 #include "../src/config.h"
+#include "../src/persist.h"
 
 // Datos de prueba: registros de información del sensor
 static const uint16_t register_sensor_info[] = {
@@ -236,6 +238,52 @@ static void test_config_precedence(void)
     ASSERT(cfg.interval_sec == 15, "CLI (15) gana sobre archivo (60)");
 }
 
+static void test_config_persist_path_default(void)
+{
+    printf("\n=== TEST: Config persist_path default ===\n");
+    AppConfig cfg;
+    config_init(&cfg);
+    ASSERT(strcmp(cfg.persist_path, CONFIG_DEFAULT_PERSIST_PATH) == 0,
+           "persist_path por defecto = /SD/pending");
+}
+
+static void test_persist_write(void)
+{
+    printf("\n=== TEST: persist_write ===\n");
+
+    const char *dir  = "/tmp/qw3100_test_pending";
+    const char *json = "{\"test\":true}";
+    long ts = 1700000000L;
+
+    /* Escritura debe tener éxito */
+    int rc = persist_write(dir, ts, json);
+    ASSERT(rc == 0, "persist_write retorna 0 en exito");
+
+    /* Verificar que el archivo existe y contiene el JSON */
+    char path[256];
+    snprintf(path, sizeof(path), "%s/%ld.json", dir, ts);
+    FILE *f = fopen(path, "r");
+    ASSERT(f != NULL, "archivo <ts>.json creado");
+
+    if (f != NULL)
+    {
+        char buf[64] = {0};
+        size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+        fclose(f);
+        ASSERT(n == strlen(json) && strcmp(buf, json) == 0, "contenido del archivo coincide con JSON");
+        remove(path);
+    }
+
+    /* Segunda llamada con mismo directorio: no debe fallar (EEXIST tolerado) */
+    rc = persist_write(dir, ts + 1, json);
+    ASSERT(rc == 0, "persist_write reutiliza directorio existente");
+
+    char path2[256];
+    snprintf(path2, sizeof(path2), "%s/%ld.json", dir, ts + 1);
+    remove(path2);
+    rmdir(dir);
+}
+
 int main(void)
 {
     printf("=================================\n");
@@ -250,6 +298,8 @@ int main(void)
     test_config_cli_invalid();
     test_config_file_not_found();
     test_config_precedence();
+    test_config_persist_path_default();
+    test_persist_write();
     
     printf("\n=================================\n");
     printf("Resultados: %d OK  /  %d FAIL\n", tests_passed, tests_failed);

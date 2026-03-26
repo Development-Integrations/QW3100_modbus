@@ -16,6 +16,7 @@
 #include "sensor.h"
 #include "modbus_comm.h"
 #include "config.h"
+#include "persist.h"
 
 static const GatewayInfo gateway_info = {
     "AP2200-Gateway",
@@ -160,6 +161,7 @@ int main(int argc, char *argv[])
             if (payload_json != NULL)
             {
                 printf("%s\n", payload_json);
+                persist_write(cfg.persist_path, (long)now, payload_json);
                 cJSON_free(payload_json);
             }
             else
