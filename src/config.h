@@ -5,6 +5,8 @@
 
 #define CONFIG_DEFAULT_INTERVAL_SEC   120
 #define CONFIG_DEFAULT_PATH           "/SD/qw3100-config.json"
+#define CONFIG_DEFAULT_SERIAL_PORT    "/dev/ttymxc2"
+#define CONFIG_DEFAULT_SLAVE_ID       1
 
 /* Resultado de carga de configuración desde archivo */
 typedef enum
@@ -21,8 +23,10 @@ typedef enum
  */
 typedef struct
 {
-    uint16_t interval_sec; /* Período de captura en segundos (1..65535) */
+    uint16_t interval_sec;     /* Período de captura en segundos (1..65535) */
     char     config_path[128]; /* Ruta del archivo de configuración */
+    char     serial_port[64];  /* Puerto serial Modbus RTU (ej: /dev/ttymxc2) */
+    uint8_t  slave_id;         /* Modbus slave ID del sensor (1..247) */
 } AppConfig;
 
 /*

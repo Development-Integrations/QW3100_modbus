@@ -17,7 +17,6 @@
 #include "modbus_comm.h"
 #include "config.h"
 
-const int REMOTE_ID = 1;
 static const GatewayInfo gateway_info = {
     "AP2200-Gateway",
     100234,
@@ -78,14 +77,14 @@ int main(int argc, char *argv[])
     SensorSnapshot snapshot;
     char *payload_json;
 
-    ctx = modbus_new_rtu("/dev/ttymxc2", 115200, 'N', 8, 1);
+    ctx = modbus_new_rtu(cfg.serial_port, 115200, 'N', 8, 1);
     if (ctx == NULL)
     {
         fprintf(stderr, "Unable to create the libmodbus context: %s\n", modbus_strerror(errno));
         return -1;
     }
 
-    rc = modbus_set_slave(ctx, REMOTE_ID);
+    rc = modbus_set_slave(ctx, cfg.slave_id);
     if (rc == -1)
     {
         fprintf(stderr, "Invalid slave ID: %s\n", modbus_strerror(errno));
@@ -128,10 +127,16 @@ int main(int argc, char *argv[])
         memcpy(register_sensor_all, register_sensor_info, sizeof(register_sensor_info));
         memcpy(register_sensor_all + REGISTER_SENSOR_INFO_SIZE, register_sensor_Data, sizeof(register_sensor_Data));
 
-        uint8_t counter = 0;
         for (size_t i = 0; i < dataSensor_count; i++)
         {
-            counter += value_set(&dataSensor[i], register_sensor_all + counter);
+            uint8_t offset;
+            if (dataSensor[i].ID >= 21 && dataSensor[i].ID <= 32)
+                offset = dataSensor[i].ID - 21;
+            else if (dataSensor[i].ID >= 79 && dataSensor[i].ID <= 141)
+                offset = REGISTER_SENSOR_INFO_SIZE + (dataSensor[i].ID - 79);
+            else
+                continue;
+            value_set(&dataSensor[i], register_sensor_all + offset);
         }
 
         // reporta el tiempo actual

@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "1. Compilar ARM",
+            "label": "1. Compilar ARM (cross armv7l)",
             "type": "shell",
             "command": "arm-linux-gnueabihf-gcc",
             "args": [
@@ -11,56 +11,53 @@
                 "./src/modbus_comm.c",
                 "./src/config.c",
                 "./lib/cJSON.c",
-                "-o",
-                "sensor_trident_modbus_ARM",
-                "-static",
-                "-Wall",
-                "-Wextra",
-                "-I/home/nesas-10/opt/libmodbus-arm/include/modbus",
-                "/home/nesas-10/opt/libmodbus-arm/lib/libmodbus.a"
-            ]
+                "-o", "sensor_trident_modbus_ARM",
+                "-static", "-Wall", "-Wextra",
+                "-I${env:HOME}/opt/libmodbus-arm/include/modbus",
+                "${env:HOME}/opt/libmodbus-arm/lib/libmodbus.a"
+            ],
+            "problemMatcher": ["$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
         },
         {
             "label": "2. Enviar por SCP",
             "type": "shell",
             "command": "scp",
             "args": [
-                "-P",
-                "2122",
                 "sensor_trident_modbus_ARM",
-                "root@192.168.188.29:/SD/"
+                "qw3100-device:/SD/"
             ],
-            "dependsOn": "1. Compilar ARM"
-        },
-        {
-            "label": "3. Ejecutar en Dispositivo",
-            "type": "shell",
-            "command": "terminator",
-            "args": [
-                "-M",
-                "-x",
-                "ssh",
-                "-t",
-                "-p",
-                "2122",
-                "root@192.168.188.39",
-                "/SD/sensor_trident_modbus_ARM",
-                "--interval",
-                "5"
-            ],
-            "dependsOn": "2. Enviar por SCP",
+            "dependsOn": "1. Compilar ARM (cross armv7l)",
             "problemMatcher": [],
             "presentation": {
-                "echo": true,
                 "reveal": "always",
-                "panel": "new",
-                "focus": true,
-                "group": "ejecucion",
+                "panel": "shared",
                 "clear": false
             }
         },
         {
-            "label": "Compilar binario Native para Pruebas ",
+            "label": "3. Ejecutar en Dispositivo",
+            "type": "shell",
+            "command": "ssh",
+            "args": [
+                "qw3100-device",
+                "/SD/sensor_trident_modbus_ARM --interval 5"
+            ],
+            "dependsOn": "2. Enviar por SCP",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true,
+                "clear": false
+            }
+        },
+        {
+            "label": "Compilar Native (pruebas)",
             "type": "shell",
             "command": "gcc",
             "args": [
@@ -69,21 +66,20 @@
                 "./src/modbus_comm.c",
                 "./src/config.c",
                 "./lib/cJSON.c",
-                "-o",
-                "./test/main_test",
-                "-g",
-                "-O0",
-                "-Wall",
-                "-Wextra",
-                "-I/home/nesas-10/opt/libmodbus-native/include/modbus",
-                "/home/nesas-10/opt/libmodbus-native/lib/libmodbus.a"
+                "-o", "./test/main_test",
+                "-g", "-O0", "-Wall", "-Wextra",
+                "-I${env:HOME}/opt/libmodbus-native/include/modbus",
+                "${env:HOME}/opt/libmodbus-native/lib/libmodbus.a"
             ],
-            "problemMatcher": [
-                "$gcc"
-            ],
+            "problemMatcher": ["$gcc"],
             "group": {
                 "kind": "build",
                 "isDefault": false
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
             }
         }
     ]

@@ -110,6 +110,40 @@ static void test_config_defaults(void)
 
     ASSERT(cfg.interval_sec == CONFIG_DEFAULT_INTERVAL_SEC, "intervalo por defecto = 120");
     ASSERT(strcmp(cfg.config_path, CONFIG_DEFAULT_PATH) == 0, "ruta por defecto = /SD/qw3100-config.json");
+    ASSERT(strcmp(cfg.serial_port, CONFIG_DEFAULT_SERIAL_PORT) == 0, "serial_port por defecto = /dev/ttymxc2");
+    ASSERT(cfg.slave_id == CONFIG_DEFAULT_SLAVE_ID, "slave_id por defecto = 1");
+}
+
+static void test_config_new_fields_from_file(void)
+{
+    printf("\n=== TEST: Config serial_port y slave_id desde archivo ===\n");
+
+    const char *tmp_path = "/tmp/qw3100_test_newfields.json";
+    FILE *f = fopen(tmp_path, "w");
+    if (f == NULL) { printf("  [SKIP] No se pudo crear archivo temporal\n"); return; }
+    fprintf(f, "{\"interval_sec\":30,\"serial_port\":\"/dev/ttyUSB0\",\"slave_id\":5}");
+    fclose(f);
+
+    AppConfig cfg;
+    config_init(&cfg);
+    strncpy(cfg.config_path, tmp_path, sizeof(cfg.config_path) - 1);
+
+    ConfigFileResult r = config_load_file(&cfg);
+    ASSERT(r == CONFIG_FILE_OK, "archivo con serial_port y slave_id leído OK");
+    ASSERT(cfg.interval_sec == 30, "interval_sec = 30 desde archivo");
+    ASSERT(strcmp(cfg.serial_port, "/dev/ttyUSB0") == 0, "serial_port = /dev/ttyUSB0 desde archivo");
+    ASSERT(cfg.slave_id == 5, "slave_id = 5 desde archivo");
+
+    /* slave_id fuera de rango */
+    FILE *f2 = fopen(tmp_path, "w");
+    fprintf(f2, "{\"slave_id\":248}");
+    fclose(f2);
+    config_init(&cfg);
+    strncpy(cfg.config_path, tmp_path, sizeof(cfg.config_path) - 1);
+    r = config_load_file(&cfg);
+    ASSERT(r == CONFIG_FILE_INVALID_VALUE, "slave_id 248 rechazado (fuera de 1..247)");
+
+    remove(tmp_path);
 }
 
 static void test_config_cli_override(void)
@@ -211,6 +245,7 @@ int main(void)
     test_data_types();
     test_sensor_data_parsing();
     test_config_defaults();
+    test_config_new_fields_from_file();
     test_config_cli_override();
     test_config_cli_invalid();
     test_config_file_not_found();

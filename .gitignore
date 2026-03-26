@@ -1,0 +1,4 @@
+.env
+*.o
+sensor_trident_modbus_ARM
+main_test

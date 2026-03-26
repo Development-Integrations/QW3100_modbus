@@ -141,7 +141,7 @@ int build_sensor_snapshot(const DataSensor *src, size_t n, time_t now, SensorSna
     memset(out, 0, sizeof(*out));
 
     out->ts = (uint32_t)now;
-    strncpy(out->type, "<qm/qw>", sizeof(out->type) - 1);
+    strncpy(out->type, "qw", sizeof(out->type) - 1);
     out->type[sizeof(out->type) - 1] = '\0';
 
     if (sysinfo(&sys_info) == 0)

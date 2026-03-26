@@ -1,59 +1,61 @@
 #!/bin/bash
 
-set -e  # detener si hay error
+# =============================================================================
+# Instala libmodbus estatica para el target seleccionado.
+# Descomenta UNA de las dos secciones antes de ejecutar:
+#
+#   NATIVA   -> x86_64  (PC de desarrollo, para pruebas locales)
+#   CRUZADA  -> armv7l  (dispositivo embebido, arm-linux-gnueabihf)
+#               Requiere: sudo apt install gcc-arm-linux-gnueabihf
+# =============================================================================
 
+set -e
 
+sudo apt update
+sudo apt upgrade -y
 
-# Clonar libmodbus e ignorar si ya existe
+sudo apt install -y build-essential gcc-arm-linux-gnueabihf autoconf automake libtool git
+
+export WORKDIR=$(pwd)
+
+cd $WORKDIR/lib
+
+# Clonar libmodbus si no existe
 if [ ! -d "libmodbus" ]; then
     git clone https://github.com/stephane/libmodbus.git
 fi
-cd libmodbus
-
-# generar el configure
+cd $WORKDIR/lib/libmodbus
 ./autogen.sh
 
-# ------------ solo dejar un tipo de compilacion -----------------
-# para la compilacion cruzada
-export PREFIX_ARM="$HOME/opt/libmodbus-arm" # para persistencia pegar en .bashrc o .zshrc
-
-echo "Instalando libmodbus en $PREFIX_ARM"
-mkdir -p "$PREFIX_ARM"
-
+# =============================================================================
+# OPCION A: Nativa x86_64  (PC de desarrollo)
+# =============================================================================
+export PREFIX="$HOME/opt/libmodbus-native"
+mkdir -p "$PREFIX"
 ./configure \
-  --host=arm-linux-gnueabihf \
-  --prefix="$PREFIX_ARM" \
+  --prefix="$PREFIX" \
   --enable-static \
-  --disable-shared \
-  CC=arm-linux-gnueabihf-gcc
+  --disable-shared
 
-# para la compilacion nativa
-# export PREFIX_NATIVE="$HOME/opt/libmodbus-native" # para persistencia pegar en .bashrc o .zshrc
-# mkdir -p "$PREFIX_NATIVE"
+# =============================================================================
+# OPCION B: Compilacion cruzada -> armv7l  (dispositivo embebido)
+# =============================================================================
+# export PREFIX="$HOME/opt/libmodbus-arm"
+# mkdir -p "$PREFIX"
 # ./configure \
-#   --prefix="$PREFIX_NATIVE" \
+#   --host=arm-linux-gnueabihf \
+#   --prefix="$PREFIX" \
 #   --enable-static \
-#   --disable-shared
+#   --disable-shared \
+#   CC=arm-linux-gnueabihf-gcc
 
-# ----------------------------------------------------------------
-
-# Compilar e instalar
+# =============================================================================
 make -j$(nproc)
 make install
 
-
-
-
-#verificar la instalacion para ARM
-if [ -f "$PREFIX_ARM/lib/libmodbus.a" ]; then
-    echo "La biblioteca libmodbus se ha instalado correctamente en $PREFIX_ARM/lib/libmodbus.a"
+if [ -f "$PREFIX/lib/libmodbus.a" ]; then
+    echo "OK: $PREFIX/lib/libmodbus.a"
 else
-    echo "Error: No se encontró la biblioteca libmodbus en $PREFIX_ARM/lib/libmodbus.a"
-fi  
-
-# verificar la instalacion para nativo
-# if [ -f "$PREFIX_NATIVE/lib/libmodbus.a" ]; then
-#     echo "La biblioteca libmodbus se ha instalado correctamente en $PREFIX_NATIVE/lib/libmodbus.a"
-# else
-#     echo "Error: No se encontró la biblioteca libmodbus en $PREFIX_NATIVE/lib/libmodbus.a"
-# fi    
+    echo "ERROR: no se encontro libmodbus.a en $PREFIX/lib/"
+    exit 1
+fi

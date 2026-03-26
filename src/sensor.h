@@ -90,7 +90,7 @@ typedef struct
 typedef struct
 {
     uint32_t ts;         /* epoch seconds */
-    char     type[8];    /* "<qm/qw>" */
+    char     type[8];    /* "qw" */
     uint32_t uptime;     /* segundos */
     uint32_t sn;         /* serial del sensor */
 

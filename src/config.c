@@ -53,6 +53,9 @@ void config_init(AppConfig *cfg)
     cfg->interval_sec = CONFIG_DEFAULT_INTERVAL_SEC;
     strncpy(cfg->config_path, CONFIG_DEFAULT_PATH, sizeof(cfg->config_path) - 1);
     cfg->config_path[sizeof(cfg->config_path) - 1] = '\0';
+    strncpy(cfg->serial_port, CONFIG_DEFAULT_SERIAL_PORT, sizeof(cfg->serial_port) - 1);
+    cfg->serial_port[sizeof(cfg->serial_port) - 1] = '\0';
+    cfg->slave_id = CONFIG_DEFAULT_SLAVE_ID;
 }
 
 ConfigFileResult config_load_file(AppConfig *cfg)
@@ -101,6 +104,42 @@ ConfigFileResult config_load_file(AppConfig *cfg)
         cfg->interval_sec = (uint16_t)val;
     }
 
+    /* Leer "serial_port" si existe */
+    cJSON *port_item = cJSON_GetObjectItemCaseSensitive(root, "serial_port");
+    if (port_item != NULL)
+    {
+        if (!cJSON_IsString(port_item) || port_item->valuestring == NULL)
+        {
+            fprintf(stderr, "[config] 'serial_port' debe ser una cadena\n");
+            cJSON_Delete(root);
+            return CONFIG_FILE_INVALID_VALUE;
+        }
+        strncpy(cfg->serial_port, port_item->valuestring, sizeof(cfg->serial_port) - 1);
+        cfg->serial_port[sizeof(cfg->serial_port) - 1] = '\0';
+    }
+
+    /* Leer "slave_id" si existe */
+    cJSON *slave_item = cJSON_GetObjectItemCaseSensitive(root, "slave_id");
+    if (slave_item != NULL)
+    {
+        if (!cJSON_IsNumber(slave_item))
+        {
+            fprintf(stderr, "[config] 'slave_id' debe ser un número entero\n");
+            cJSON_Delete(root);
+            return CONFIG_FILE_INVALID_VALUE;
+        }
+
+        double val = slave_item->valuedouble;
+        if (val < 1.0 || val > 247.0)
+        {
+            fprintf(stderr, "[config] 'slave_id' fuera de rango (1..247): %.0f\n", val);
+            cJSON_Delete(root);
+            return CONFIG_FILE_INVALID_VALUE;
+        }
+
+        cfg->slave_id = (uint8_t)val;
+    }
+
     cJSON_Delete(root);
     return CONFIG_FILE_OK;
 }
@@ -135,7 +174,8 @@ int config_apply_cli(AppConfig *cfg, int argc, char *argv[])
         }
         else if ((strcmp(argv[i], "--config") == 0) || (strcmp(argv[i], "-c") == 0))
         {
-            /* --config ya fue consumido en el preflight de main(); ignorar aquí */
+            /* --config ya fue consumido en el preflight de main(); consumir el valor */
+            if ((i + 1) < argc) i++;
         }
         else
         {
@@ -151,4 +191,6 @@ void config_print(const AppConfig *cfg)
 {
     printf("[config] interval_sec : %u s\n", cfg->interval_sec);
     printf("[config] config_path  : %s\n",   cfg->config_path);
+    printf("[config] serial_port  : %s\n",   cfg->serial_port);
+    printf("[config] slave_id     : %u\n",   cfg->slave_id);
 }
