@@ -64,10 +64,12 @@ int persist_list_pending(const char *dir_path,
         return -1;
     }
 
+    /* Modo count-only: out_files==NULL y max_files==0 cuenta todos sin almacenar */
     int count = 0;
+    int count_only = (out_files == NULL || max_files == 0);
     struct dirent *entry;
 
-    while ((entry = readdir(dir)) != NULL && count < max_files)
+    while ((entry = readdir(dir)) != NULL)
     {
         if (entry->d_name[0] == '.')
             continue;
@@ -76,13 +78,19 @@ int persist_list_pending(const char *dir_path,
         if (len < 6 || strcmp(entry->d_name + len - 5, ".json") != 0)
             continue;
 
-        strncpy(out_files[count], entry->d_name, sizeof(PendingFileName) - 1);
-        out_files[count][sizeof(PendingFileName) - 1] = '\0';
+        if (!count_only && count < max_files)
+        {
+            strncpy(out_files[count], entry->d_name, sizeof(PendingFileName) - 1);
+            out_files[count][sizeof(PendingFileName) - 1] = '\0';
+        }
         count++;
+        if (!count_only && count >= max_files)
+            break;
     }
 
     closedir(dir);
-    qsort(out_files, count, sizeof(PendingFileName), cmp_filenames);
+    if (!count_only)
+        qsort(out_files, count, sizeof(PendingFileName), cmp_filenames);
     return count;
 }
 

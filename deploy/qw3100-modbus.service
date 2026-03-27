@@ -1,0 +1,16 @@
+[Unit]
+Description=QW3100 Modbus Sensor Service
+Documentation=https://github.com/Development-Integrations/QW3100_modbus
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/SD/sensor_trident_modbus_ARM --config /SD/qw3100-config.json
+Restart=on-failure
+RestartSec=30s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=qw3100
+
+[Install]
+WantedBy=multi-user.target

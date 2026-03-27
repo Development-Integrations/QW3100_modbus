@@ -1,6 +1,6 @@
 #include "circuit_breaker.h"
+#include "logger.h"
 
-#include <stdio.h>
 #include <time.h>
 
 void cb_init(CircuitBreaker *cb)
@@ -21,11 +21,11 @@ int cb_allow_send(CircuitBreaker *cb)
         long remaining = (long)(cb->next_retry - time(NULL));
         if (remaining > 0)
         {
-            fprintf(stderr, "[cb] OPEN — envío pausado (%ld s restantes)\n", remaining);
+            LOG_WARN("[cb] OPEN — envío pausado (%ld s restantes)", remaining);
             return 0;
         }
         cb->state = CB_HALF_OPEN;
-        printf("[cb] HALF_OPEN — probando conexión\n");
+        LOG_INFO("[cb] HALF_OPEN — probando conexión");
     }
 
     /* CB_HALF_OPEN: permite un intento */
@@ -35,7 +35,7 @@ int cb_allow_send(CircuitBreaker *cb)
 void cb_on_success(CircuitBreaker *cb)
 {
     if (cb->state != CB_CLOSED)
-        printf("[cb] CLOSED — circuito restablecido tras éxito\n");
+        LOG_INFO("[cb] CLOSED — circuito restablecido tras éxito");
 
     cb->state           = CB_CLOSED;
     cb->fail_count      = 0;
@@ -59,7 +59,7 @@ static void open_circuit(CircuitBreaker *cb,
     cb->state      = CB_OPEN;
     cb->next_retry = time(NULL) + (time_t)cb->current_timeout;
 
-    fprintf(stderr, "[cb] OPEN — reintentará en %u s\n", cb->current_timeout);
+    LOG_WARN("[cb] OPEN — reintentará en %u s", cb->current_timeout);
 }
 
 void cb_on_transient_fail(CircuitBreaker *cb,
@@ -68,7 +68,7 @@ void cb_on_transient_fail(CircuitBreaker *cb,
                            uint32_t backoff_max_sec)
 {
     cb->fail_count++;
-    fprintf(stderr, "[cb] fallo transitorio %d/%d\n", cb->fail_count, (int)fail_threshold);
+    LOG_WARN("[cb] fallo transitorio %d/%d", cb->fail_count, (int)fail_threshold);
 
     /* Abre si alcanza el umbral o si ya estaba en HALF_OPEN (prueba fallida) */
     if (cb->fail_count >= (int)fail_threshold || cb->state == CB_HALF_OPEN)
@@ -79,7 +79,7 @@ void cb_on_persistent_fail(CircuitBreaker *cb,
                             uint32_t open_timeout_sec,
                             uint32_t backoff_max_sec)
 {
-    fprintf(stderr, "[cb] fallo persistente — abriendo circuito inmediatamente\n");
+    LOG_ERROR("[cb] fallo persistente — abriendo circuito inmediatamente");
     cb->fail_count = 0;
     open_circuit(cb, open_timeout_sec, backoff_max_sec);
 }

@@ -30,6 +30,7 @@
 #include "persist.h"
 #include "http_sender.h"
 #include "circuit_breaker.h"
+#include "logger.h"
 
 static const GatewayInfo gateway_info = {
     "AP2200-Gateway",
@@ -251,6 +252,16 @@ int main(int argc, char *argv[])
         else
         {
             fprintf(stderr, "No se pudo construir snapshot del sensor\n");
+        }
+
+        /* Línea de estado por ciclo: CB state + archivos pendientes */
+        {
+            int pending = persist_list_pending(cfg.persist_path, NULL, 0);
+            const char *cb_state_str = (cb.state == CB_CLOSED)    ? "CLOSED"    :
+                                       (cb.state == CB_OPEN)       ? "OPEN"      :
+                                                                      "HALF_OPEN";
+            LOG_INFO("[status] cb=%s fallos=%d pendientes=%d",
+                     cb_state_str, cb.fail_count, pending < 0 ? 0 : pending);
         }
 
         sleep(cfg.interval_sec);
