@@ -31,6 +31,7 @@ SRCS_TEST = test/main_test.c \
             src/modbus_comm.c \
             src/config.c \
             src/persist.c \
+            src/http_sender.c \
             lib/cJSON.c
 
 TARGET      = sensor_trident_modbus_ARM
