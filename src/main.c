@@ -36,6 +36,54 @@ static const GatewayInfo gateway_info = {
     "1.20.3"
 };
 
+/* Máximo de archivos pendientes a procesar por ciclo */
+#define FIFO_MAX_PER_CYCLE 10
+
+/*
+ * Recorre /SD/pending/ en orden FIFO (más antiguo primero).
+ * Por cada archivo: intenta enviarlo y si OK lo elimina.
+ * Se detiene ante el primer error para no saturar la red.
+ */
+static void try_send_pending(const AppConfig *cfg)
+{
+    if (!cfg->api.enabled)
+        return;
+
+    PendingFileName files[FIFO_MAX_PER_CYCLE];
+    int count = persist_list_pending(cfg->persist_path, files, FIFO_MAX_PER_CYCLE);
+    if (count <= 0)
+        return;
+
+    int i;
+    for (i = 0; i < count; i++)
+    {
+        char *payload = persist_read_file(cfg->persist_path, files[i]);
+        if (payload == NULL)
+            continue;
+
+        HttpResult r = http_post(&cfg->api, payload);
+        free(payload);
+
+        if (r == HTTP_OK)
+        {
+            persist_delete(cfg->persist_path, files[i]);
+            printf("[fifo] enviado y eliminado: %s\n", files[i]);
+        }
+        else if (r == HTTP_ERR_TRANSIENT)
+        {
+            fprintf(stderr, "[fifo] error transitorio — reintentará en próximo ciclo: %s\n",
+                    files[i]);
+            break;
+        }
+        else
+        {
+            /* HTTP_ERR_PERSISTENT o HTTP_ERR_CURL */
+            fprintf(stderr, "[fifo] error persistente — deteniendo cola\n");
+            break;
+        }
+    }
+}
+
 /*
  * Preflight: recorre argv buscando --config/-c para establecer la ruta
  * del archivo de configuración antes de cargarlo.
@@ -174,8 +222,8 @@ int main(int argc, char *argv[])
             {
                 printf("%s\n", payload_json);
                 persist_write(cfg.persist_path, (long)now, payload_json);
-                http_post(&cfg.api, payload_json);
                 cJSON_free(payload_json);
+                try_send_pending(&cfg);
             }
             else
             {
