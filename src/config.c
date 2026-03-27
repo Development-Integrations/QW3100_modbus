@@ -67,6 +67,12 @@ void config_init(AppConfig *cfg)
     cfg->api.scante_token[0]    = '\0';
     cfg->api.scante_appid[0]    = '\0';
     cfg->api.scante_sgid[0]     = '\0';
+
+    /* Send / circuit breaker defaults */
+    cfg->send.fifo_max_per_cycle  = CONFIG_DEFAULT_FIFO_MAX_PER_CYCLE;
+    cfg->send.cb_fail_threshold   = CONFIG_DEFAULT_CB_FAIL_THRESHOLD;
+    cfg->send.cb_open_timeout_sec = CONFIG_DEFAULT_CB_OPEN_TIMEOUT;
+    cfg->send.cb_backoff_max_sec  = CONFIG_DEFAULT_CB_BACKOFF_MAX;
 }
 
 ConfigFileResult config_load_file(AppConfig *cfg)
@@ -191,6 +197,45 @@ ConfigFileResult config_load_file(AppConfig *cfg)
 #undef PARSE_STR
     }
 
+    /* Leer objeto "send" si existe */
+    cJSON *send = cJSON_GetObjectItemCaseSensitive(root, "send");
+    if (send != NULL)
+    {
+#define PARSE_UINT8(key, field, min, max) \
+    do { \
+        cJSON *_it = cJSON_GetObjectItemCaseSensitive(send, key); \
+        if (_it != NULL) { \
+            if (!cJSON_IsNumber(_it) || _it->valuedouble < (min) || _it->valuedouble > (max)) { \
+                fprintf(stderr, "[config] '%s' debe ser entero %d..%d\n", key, (int)(min), (int)(max)); \
+                cJSON_Delete(root); \
+                return CONFIG_FILE_INVALID_VALUE; \
+            } \
+            cfg->send.field = (uint8_t)_it->valuedouble; \
+        } \
+    } while (0)
+
+#define PARSE_UINT32(key, field, min, max) \
+    do { \
+        cJSON *_it = cJSON_GetObjectItemCaseSensitive(send, key); \
+        if (_it != NULL) { \
+            if (!cJSON_IsNumber(_it) || _it->valuedouble < (min) || _it->valuedouble > (max)) { \
+                fprintf(stderr, "[config] '%s' debe ser entero %d..%d\n", key, (int)(min), (int)(max)); \
+                cJSON_Delete(root); \
+                return CONFIG_FILE_INVALID_VALUE; \
+            } \
+            cfg->send.field = (uint32_t)_it->valuedouble; \
+        } \
+    } while (0)
+
+        PARSE_UINT8  ("fifo_max_per_cycle",  fifo_max_per_cycle,  1,   50);
+        PARSE_UINT8  ("cb_fail_threshold",   cb_fail_threshold,   1,   20);
+        PARSE_UINT32 ("cb_open_timeout_sec", cb_open_timeout_sec, 10,  3600);
+        PARSE_UINT32 ("cb_backoff_max_sec",  cb_backoff_max_sec,  10,  86400);
+
+#undef PARSE_UINT8
+#undef PARSE_UINT32
+    }
+
     cJSON_Delete(root);
     return CONFIG_FILE_OK;
 }
@@ -248,4 +293,8 @@ void config_print(const AppConfig *cfg)
     printf("[config] api.enabled  : %s\n",   cfg->api.enabled ? "true" : "false");
     if (cfg->api.enabled)
         printf("[config] api.base_url : %s\n", cfg->api.base_url);
+    printf("[config] fifo_max     : %u archivos/ciclo\n", cfg->send.fifo_max_per_cycle);
+    printf("[config] cb_threshold : %u fallos\n",         cfg->send.cb_fail_threshold);
+    printf("[config] cb_timeout   : %u s\n",              cfg->send.cb_open_timeout_sec);
+    printf("[config] cb_backoff   : %u s max\n",          cfg->send.cb_backoff_max_sec);
 }

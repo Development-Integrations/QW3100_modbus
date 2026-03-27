@@ -4,11 +4,17 @@
 #include <stdint.h>
 #include "http_sender.h"
 
-#define CONFIG_DEFAULT_INTERVAL_SEC   120
-#define CONFIG_DEFAULT_PATH           "/SD/qw3100-config.json"
-#define CONFIG_DEFAULT_SERIAL_PORT    "/dev/ttymxc2"
-#define CONFIG_DEFAULT_SLAVE_ID       1
-#define CONFIG_DEFAULT_PERSIST_PATH   "/SD/pending"
+#define CONFIG_DEFAULT_INTERVAL_SEC       120
+#define CONFIG_DEFAULT_PATH               "/SD/qw3100-config.json"
+#define CONFIG_DEFAULT_SERIAL_PORT        "/dev/ttymxc2"
+#define CONFIG_DEFAULT_SLAVE_ID           1
+#define CONFIG_DEFAULT_PERSIST_PATH       "/SD/pending"
+
+/* Defaults del módulo de envío y circuit breaker */
+#define CONFIG_DEFAULT_FIFO_MAX_PER_CYCLE 10   /* archivos por ciclo */
+#define CONFIG_DEFAULT_CB_FAIL_THRESHOLD  5    /* fallos para abrir circuito */
+#define CONFIG_DEFAULT_CB_OPEN_TIMEOUT    60   /* segundos antes de HALF_OPEN */
+#define CONFIG_DEFAULT_CB_BACKOFF_MAX     300  /* máximo backoff exponencial (5 min) */
 
 /* Resultado de carga de configuración desde archivo */
 typedef enum
@@ -19,18 +25,28 @@ typedef enum
     CONFIG_FILE_INVALID_VALUE /* Valor fuera de rango */
 } ConfigFileResult;
 
+/* Parámetros de envío y circuit breaker — bloque "send" en el JSON de config */
+typedef struct
+{
+    uint8_t  fifo_max_per_cycle;  /* archivos pendientes a procesar por ciclo */
+    uint8_t  cb_fail_threshold;   /* fallos consecutivos para abrir el circuito */
+    uint32_t cb_open_timeout_sec; /* segundos de espera antes de pasar a HALF_OPEN */
+    uint32_t cb_backoff_max_sec;  /* límite máximo del backoff exponencial */
+} SendConfig;
+
 /*
  * Configuración de la aplicación.
  * Precedencia de llenado: default → archivo JSON → argumento CLI
  */
 typedef struct
 {
-    uint16_t interval_sec;     /* Período de captura en segundos (1..65535) */
-    char     config_path[128]; /* Ruta del archivo de configuración */
-    char     serial_port[64];  /* Puerto serial Modbus RTU (ej: /dev/ttymxc2) */
-    uint8_t  slave_id;         /* Modbus slave ID del sensor (1..247) */
-    char     persist_path[128]; /* Directorio donde guardar JSON pendientes */
-    HttpConfig api;             /* Configuración HTTP POST a API Scante */
+    uint16_t   interval_sec;      /* Período de captura en segundos (1..65535) */
+    char       config_path[128];  /* Ruta del archivo de configuración */
+    char       serial_port[64];   /* Puerto serial Modbus RTU (ej: /dev/ttymxc2) */
+    uint8_t    slave_id;          /* Modbus slave ID del sensor (1..247) */
+    char       persist_path[128]; /* Directorio donde guardar JSON pendientes */
+    HttpConfig api;               /* Configuración HTTP POST a API Scante */
+    SendConfig send;              /* Parámetros de envío y circuit breaker */
 } AppConfig;
 
 /*

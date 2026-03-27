@@ -1,6 +1,21 @@
 {
-    "interval_sec": 120,
+    "interval_sec": 10,
     "serial_port": "/dev/ttymxc2",
     "slave_id": 1,
-    "persist_path": "/SD/pending"
+    "persist_path": "/SD/pending",
+    "api": {
+        "enabled": true,
+        "base_url": "http://192.168.188.1:9090",
+        "item_guid": "test-item-guid",
+        "pull_type_guid": "test-pull-type-guid",
+        "scante_token": "test-token",
+        "scante_appid": "test-appid",
+        "scante_sgid": "test-sgid"
+    },
+    "send": {
+        "fifo_max_per_cycle": 5,
+        "cb_fail_threshold": 3,
+        "cb_open_timeout_sec": 30,
+        "cb_backoff_max_sec": 120
+    }
 }

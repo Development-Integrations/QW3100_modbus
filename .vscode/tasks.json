@@ -12,6 +12,7 @@
                 "./src/config.c",
                 "./src/persist.c",
                 "./src/http_sender.c",
+                "./src/circuit_breaker.c",
                 "./lib/cJSON.c",
                 "-o", "sensor_trident_modbus_ARM",
                 "-static",

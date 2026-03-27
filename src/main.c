@@ -2,7 +2,7 @@
     compilacion cruzada
     export PREFIX_ARM="$HOME/opt/libmodbus-arm"
     export PREFIX_CURL_ARM="$HOME/opt/libcurl-arm"
-    arm-linux-gnueabihf-gcc ./src/main.c ./src/sensor.c ./src/modbus_comm.c ./src/config.c ./src/persist.c ./src/http_sender.c ./lib/cJSON.c \
+    arm-linux-gnueabihf-gcc ./src/main.c ./src/sensor.c ./src/modbus_comm.c ./src/config.c ./src/persist.c ./src/http_sender.c ./src/circuit_breaker.c ./lib/cJSON.c \
     -o sensor_trident_modbus_ARM \
     -static \
     -Wall -Wextra \
@@ -29,6 +29,7 @@
 #include "config.h"
 #include "persist.h"
 #include "http_sender.h"
+#include "circuit_breaker.h"
 
 static const GatewayInfo gateway_info = {
     "AP2200-Gateway",
@@ -44,13 +45,19 @@ static const GatewayInfo gateway_info = {
  * Por cada archivo: intenta enviarlo y si OK lo elimina.
  * Se detiene ante el primer error para no saturar la red.
  */
-static void try_send_pending(const AppConfig *cfg)
+static void try_send_pending(const AppConfig *cfg, CircuitBreaker *cb)
 {
     if (!cfg->api.enabled)
         return;
 
-    PendingFileName files[FIFO_MAX_PER_CYCLE];
-    int count = persist_list_pending(cfg->persist_path, files, FIFO_MAX_PER_CYCLE);
+    if (!cb_allow_send(cb))
+        return;
+
+    /* En HALF_OPEN sólo se prueba con 1 archivo para no saturar */
+    int max = (cb->state == CB_HALF_OPEN) ? 1 : (int)cfg->send.fifo_max_per_cycle;
+
+    PendingFileName files[50]; /* tamaño máximo posible de fifo_max_per_cycle */
+    int count = persist_list_pending(cfg->persist_path, files, max);
     if (count <= 0)
         return;
 
@@ -68,17 +75,25 @@ static void try_send_pending(const AppConfig *cfg)
         {
             persist_delete(cfg->persist_path, files[i]);
             printf("[fifo] enviado y eliminado: %s\n", files[i]);
+            cb_on_success(cb);
         }
         else if (r == HTTP_ERR_TRANSIENT)
         {
             fprintf(stderr, "[fifo] error transitorio — reintentará en próximo ciclo: %s\n",
                     files[i]);
+            cb_on_transient_fail(cb,
+                                 cfg->send.cb_fail_threshold,
+                                 cfg->send.cb_open_timeout_sec,
+                                 cfg->send.cb_backoff_max_sec);
             break;
         }
         else
         {
             /* HTTP_ERR_PERSISTENT o HTTP_ERR_CURL */
             fprintf(stderr, "[fifo] error persistente — deteniendo cola\n");
+            cb_on_persistent_fail(cb,
+                                  cfg->send.cb_open_timeout_sec,
+                                  cfg->send.cb_backoff_max_sec);
             break;
         }
     }
@@ -125,6 +140,9 @@ int main(int argc, char *argv[])
     }
 
     config_print(&cfg);
+
+    CircuitBreaker cb;
+    cb_init(&cb);
 
     uint16_t register_sensor_info[REGISTER_SENSOR_INFO_SIZE];
     uint16_t register_sensor_Data[REGISTER_SENSOR_DATA_SIZE];
@@ -223,7 +241,7 @@ int main(int argc, char *argv[])
                 printf("%s\n", payload_json);
                 persist_write(cfg.persist_path, (long)now, payload_json);
                 cJSON_free(payload_json);
-                try_send_pending(&cfg);
+                try_send_pending(&cfg, &cb);
             }
             else
             {
