@@ -189,13 +189,29 @@ int main(int argc, char *argv[])
 
     printf("Connected to Modbus device successfully\n");
 
+    if (modbus_wait_first_sweep(ctx) != 0)
+    {
+        LOG_ERROR("sensor no alcanzó estado válido, abortando");
+        modbus_close(ctx);
+        modbus_free(ctx);
+        exit(1);
+    }
+
     while (1)
     {
+        {
+            const char *s = (cb.state == CB_CLOSED)   ? "CLOSED"    :
+                            (cb.state == CB_OPEN)      ? "OPEN"      :
+                                                         "HALF_OPEN";
+            LOG_INFO("[ciclo] cb=%s fallos=%d", s, cb.fail_count);
+        }
+
         rc = read_block_modbus(ctx, 21, MODBUS_RANGE_SIZE(21, 32), register_sensor_info);
         if (rc == -1)
         {
-            modbus_free(ctx);
-            return -1;
+            LOG_WARN("lectura info block fallida — reintentando en siguiente ciclo");
+            sleep(cfg.interval_sec);
+            continue;
         }
         rc = read_block_modbus(ctx, 79, MODBUS_RANGE_SIZE(79, 141), register_sensor_Data);
         if (rc == -1)
