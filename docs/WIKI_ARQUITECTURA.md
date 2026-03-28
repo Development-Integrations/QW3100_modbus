@@ -1,133 +1,114 @@
-# Arquitectura del Proyecto
+# Arquitectura
 
-## 🏗️ Diagrama de Componentes
-
-```
-┌─────────────────────────────────────────────┐
-│     Binario QW3100 (main.c)                │
-│  - Loop de polling                         │
-│  - Manejo de argumentos CLI                │
-└────────────┬────────────────────────────────┘
-             │
-        ┌────┴──────────────────┬──────────────┐
-        │                       │              │
-     ┌──▼──────┐         ┌─────▼─────┐  ┌────▼────┐
-     │ Sensor  │         │  Modbus   │  │  JSON   │
-     │ Module  │         │  Comm     │  │ Serial  │
-     │         │         │           │  │         │
-     └──┬──────┘         └─────┬─────┘  └────┬────┘
-        │                      │             │
-        │      libmodbus       │     cJSON   │
-        └──────────┬───────────┴─────────────┘
-                   │
-        ┌──────────▼──────────┐
-        │  Dispositivo Remoto  │
-        │  (Sensor Trident)    │
-        └─────────────────────┘
-```
-
-## 📦 Módulos
-
-### `main.c`
-**Propósito**: Punto de entrada, coordinación general
-
-**Responsabilidades**:
-- Parseo de argumentos (intervalo de polling)
-- Inicialización de módulos
-- Loop principal de polling con intervalo configurable
-- Manejo de señales (Ctrl+C)
-- Salida de datos
-
-**Interfaz**:
-```c
-int parse_interval_arg(int argc, char *argv[], uint16_t *interval_sec)
-```
-
-### `sensor.c/h`
-**Propósito**: Abstracción del sensor y sus registros
-
-**Responsabilidades**:
-- Definición de estructura de registros del sensor
-- Mapeo de registros Modbus ↔ campos del sensor
-- Tipos de datos (UINT32, UINT16, FLOAT)
-- Información de unidades y metadatos
-
-**Estructuras**:
-```c
-#define REGISTER_SENSOR_INFO_SIZE  12
-#define REGISTER_SENSOR_DATA_SIZE  63
-#define REGISTER_SENSOR_ALL_SIZE   75
-```
-
-**Tipos de datos soportados**:
-- `TYPE_UINT32`: Registros de 32 bits (2 × 16-bit)
-- `TYPE_UINT16`: Registros de 16 bits
-- `TYPE_FLOAT`: Números flotantes
-
-### `modbus_comm.c/h`
-**Propósito**: Abstracción de comunicación Modbus
-
-**Responsabilidades**:
-- Inicialización de contexto Modbus
-- Lectura de bloques de registros
-- Traducciones de direcciones
-- Manejo de errores de comunicación
-
-**Interfaz principal**:
-```c
-int read_block_modbus(modbus_t *ctx, int addr, int size, uint16_t *buffer)
-```
-
-### `lib/cJSON.c/h`
-**Propósito**: Serialización JSON de datos
-
-**Uso**: Formateo de salida de datos del sensor a JSON
-
-## 🔄 Flujo de Datos
+## Módulos
 
 ```
-main()
-  ↓
-parse_interval_arg()
-  ↓
-Setup Modbus Context
-  ↓
-LOOP (cada N segundos):
-  ├─ read_block_modbus(ctx, ADDR, SIZE, buffer)
-  ├─ Parse buffer → sensor_data
-  ├─ Serialize → JSON
-  └─ Output (stdout/archivo)
+src/
+├── main.c              — loop principal de captura
+├── config.c/h          — carga de configuración (JSON + CLI)
+├── modbus_comm.c/h     — comunicación Modbus RTU
+├── sensor.c/h          — definición de registros y snapshot
+├── persist.c/h         — persistencia FIFO en /SD/pending/
+├── http_sender.c/h     — envío HTTP POST a API Scante
+├── circuit_breaker.c/h — control de reintentos (CB pattern)
+└── logger.h            — macros de logging con timestamp
 ```
 
-## 📡 Protocolo Modbus
+---
 
-- **Tipo**: RTU (Serial) / TCP
-- **ID Esclavo**: 1 (configurable como `REMOTE_ID`)
-- **Rango de Registros**:
-  - Info: Registros 0-11 (12 × 16-bit)
-  - Datos: Registros 12-74 (63 × 16-bit)
-  - Total: 75 registros
-
-## 🔐 Configuración
-
-| Parámetro | Valor | Ubicación |
-|-----------|-------|-----------|
-| REMOTE_ID | 1 | main.c:L19 |
-| TIME_POLLING_INTERVAL_DEFAULT | 5 seg | main.c:L21 |
-| REGISTER_SENSOR_INFO_SIZE | 12 | sensor.h |
-| REGISTER_SENSOR_DATA_SIZE | 63 | sensor.h |
-
-## 🔗 Dependencias
+## Flujo de datos
 
 ```
-QW3100 Binario
-├── libmodbus (externo, compilado)
-└── cJSON (incluido en lib/)
+Arranque
+  ├── modbus_new_rtu() + modbus_connect()
+  └── modbus_wait_first_sweep()   ← bloquea hasta sweepCount > 0
+
+while(1):
+  ├── [ciclo] LOG_INFO estado CB
+  ├── read_block_modbus(addr=21)  → register_sensor_info[]
+  ├── read_block_modbus(addr=79)  → register_sensor_Data[]
+  ├── build_sensor_snapshot()     → SensorSnapshot
+  ├── build_gateway_payload_json()→ char* JSON
+  ├── persist_write()             → /SD/pending/<ts>.json
+  ├── try_send_pending()          → HTTP POST + circuit breaker
+  ├── [status] LOG_INFO cb=STATE pendientes=N
+  └── sleep(interval_sec)
 ```
 
-## 📝 Notas de Diseño
+---
 
-- **Modular**: Cada componente puede ser testeado independientemente
-- **Cross-platform**: Compilable para ARM y x86/x64
-- **Estático**: Todas las dependencias se enlazan estáticamente
-- **JSON-ready**: Fácil serialización de resultados
+## Registros Modbus
+
+| Bloque | Dirección | Tamaño | Contenido |
+|--------|-----------|--------|-----------|
+| Info | 21–32 | 12 words | uptime, sn, fwMajor, fwMinor |
+| Data | 79–141 | 63 words | s0–s4 mag/phase/temp, oilTemp, boardTemp, rh |
+| sweepCount | 201 | 1 word | Indicador de primer barrido EIS completado |
+
+---
+
+## Circuit breaker — máquina de estados
+
+```
+                ┌──────────────────────────────────┐
+                │           CLOSED                 │
+                │  envía hasta fifo_max_per_cycle  │
+                └────────┬─────────────────────────┘
+                         │ fail_count >= cb_fail_threshold
+                         ▼
+                ┌──────────────────────────────────┐
+                │            OPEN                  │
+                │  pausa envío, captura continúa   │
+                │  espera current_timeout segundos │
+                └────────┬─────────────────────────┘
+                         │ next_retry expiró
+                         ▼
+                ┌──────────────────────────────────┐
+                │          HALF_OPEN               │
+                │  envía exactamente 1 archivo     │
+                └────┬──────────────┬──────────────┘
+                     │ HTTP 200     │ fallo
+                     ▼             ▼
+                  CLOSED        OPEN (backoff dobla)
+```
+
+**Backoff exponencial:** `cb_open_timeout_sec → ×2 → ... → cb_backoff_max_sec`
+
+---
+
+## Clasificación de errores HTTP
+
+| Respuesta | Tipo | Efecto en CB |
+|-----------|------|-------------|
+| 200 | Éxito | `cb_on_success()` → CLOSED, fail_count=0 |
+| 5xx / timeout curl | Transitorio | `cb_on_transient_fail()` → cuenta hacia OPEN |
+| 4xx (400/401/403) | Persistente | `cb_on_persistent_fail()` → OPEN inmediato |
+
+---
+
+## Reconexión Modbus
+
+`read_block_modbus()` distingue el tipo de error antes de actuar:
+
+```
+errno >= MODBUS_ENOBASE   →  excepción Modbus (slave responde)
+                              no cerrar puerto, solo reintentar lectura
+
+errno < MODBUS_ENOBASE    →  timeout / fallo de bus
+                              modbus_close() + modbus_connect() + lectura real
+```
+
+Backoff de reintentos: `2s → 4s → 8s → 16s → 32s` (5 intentos).
+Si agota → retorna -1 → `continue` en el ciclo. El daemon nunca cierra por desconexión del sensor.
+
+---
+
+## Decisiones de diseño
+
+| Decisión | Alternativa descartada | Razón |
+|----------|----------------------|-------|
+| Loop `while(1)` single-thread | POSIX threads | Sin concurrencia necesaria en ciclo de 120s |
+| Archivos JSON como persistencia | SQLite / LevelDB | Simplicidad en embebido minimal |
+| libcurl estática sin SSL | Con SSL | El endpoint final usa HTTPS en proxy externo |
+| `exit(1)` solo en warmup timeout | Loop infinito | systemd reinicia limpiamente |
+| Circuit breaker en cliente | Lógica en servidor | Canal celular — proteger la red |

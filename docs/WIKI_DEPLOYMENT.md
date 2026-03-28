@@ -1,250 +1,125 @@
-# Deployment al Dispositivo
+# Deployment
 
-## 📤 Flujo General
-
-```
-Binario compilado (sensor_trident_modbus_ARM)
-         ↓
-    Validar/Testar localmente
-         ↓
-    Enviar por SCP
-         ↓
-    Ejecutar en dispositivo
-         ↓
-    Monitorear output
-```
-
-## 🚀 Deployment Rápido (3 pasos)
-
-### Opción 1: VS Code Tasks (Integrado - Recomendado)
-
-```
-Cmd+Shift+B → "2. Enviar por SCP"
-   (esperar a que complete)
-```
-
-```
-Cmd+Shift+B → "3. Ejecutar en Dispositivo"
-```
-
-Las tareas están encadenadas con `dependsOn`, se ejecutan en orden.
-
-### Opción 2: Línea de Comando Manual
+## Envío del binario
 
 ```bash
-# Step 1: Verificar binario
-ls -la sensor_trident_modbus_ARM
-
-# Step 2: Enviar por SCP
-scp -P 2122 sensor_trident_modbus_ARM root@192.168.188.39:/SD/
-
-# Step 3: SSH y ejecutar
-ssh -p 2122 root@192.168.188.39 /SD/sensor_trident_modbus_ARM
+make deploy   # compila ARM + scp al dispositivo
 ```
 
-## 📡 Protocolo SCP (Envío)
+Manual:
+```bash
+scp sensor_trident_modbus_ARM qw3100-device:/SD/
+```
 
-### Configuración
+---
 
-| Parámetro | Valor | Ubicación |
-|-----------|-------|-----------|
-| Puerto SSH | 2122 | `.vscode/tasks.json` |
-| Host | 192.168.188.39 | `.vscode/tasks.json` |
-| Usuario | root | `.vscode/tasks.json` |
-| Destino | /SD/ | `.vscode/tasks.json` |
+## Configuración en el dispositivo
 
-### Comando Detallado
+Copiar y editar el archivo de configuración:
 
 ```bash
-scp -P 2122 \
-    sensor_trident_modbus_ARM \
-    root@192.168.188.39:/SD/
+scp qw3100-config.json qw3100-device:/SD/
 ```
 
-### Verificar Envío
+Editar en el dispositivo con las credenciales reales:
 
 ```bash
-# Conectar a dispositivo y verificar
-ssh -p 2122 root@192.168.188.39
-
-# En el dispositivo remoto:
-ls -la /SD/sensor_trident_modbus_ARM
-file /SD/sensor_trident_modbus_ARM
+ssh qw3100-device
+vi /SD/qw3100-config.json
 ```
 
-## 🎯 Ejecución Remota
+```json
+{
+    "interval_sec": 120,
+    "serial_port": "/dev/ttymxc2",
+    "slave_id": 1,
+    "persist_path": "/SD/pending",
 
-### Opción 1: SSH Interactivo
+    "api": {
+        "enabled": true,
+        "base_url": "https://apiv4-integration.productious.com",
+        "item_guid": "<item_guid_real>",
+        "pull_type_guid": "<pull_type_guid_real>",
+        "scante_token": "<token_real>",
+        "scante_appid": "<appid_real>",
+        "scante_sgid": "<sgid_real>"
+    },
+
+    "send": {
+        "fifo_max_per_cycle": 10,
+        "cb_fail_threshold": 5,
+        "cb_open_timeout_sec": 60,
+        "cb_backoff_max_sec": 300
+    }
+}
+```
+
+---
+
+## Instalación como servicio systemd
 
 ```bash
-ssh -p 2122 root@192.168.188.39
+# Copiar unit file
+scp deploy/qw3100-modbus.service qw3100-device:/etc/systemd/system/
 
-# En el dispositivo:
-cd /SD
-./sensor_trident_modbus_ARM --interval 5
+# Activar e iniciar
+ssh qw3100-device "systemctl daemon-reload && \
+                   systemctl enable qw3100-modbus && \
+                   systemctl start qw3100-modbus"
 ```
 
-### Opción 2: SSH No-interactivo (directamente)
+El unit file del proyecto está en `deploy/qw3100-modbus.service`. El dispositivo puede tener uno propio en `/etc/systemd/system/qw3100.service` — verificar cuál está activo:
 
 ```bash
-ssh -p 2122 root@192.168.188.39 "/SD/sensor_trident_modbus_ARM --interval 5"
+ssh qw3100-device "systemctl list-units | grep qw3100"
 ```
 
-### Opción 3: Terminal Integrada (VS Code)
+---
 
-```
-Cmd+Shift+B → "3. Ejecutar en Dispositivo"
-```
-
-Abre una terminal (terminator) con conexión remota.
-
-## 📊 Parámetros de Ejecución
-
-El binario acepta argumentos:
+## Operación del servicio
 
 ```bash
-./sensor_trident_modbus_ARM [OPCIÓN]
-```
+# Estado
+ssh qw3100-device "systemctl status qw3100"
 
-### Opciones
+# Logs en tiempo real
+ssh qw3100-device "journalctl -u qw3100 -f"
 
-| Opción | Alias | Descripción | Ejemplo |
-|--------|-------|-------------|---------|
-| `--interval` | `-i` | Intervalo polling (seg) | `-i 10` (cada 10 seg) |
+# Logs de las últimas 2 horas
+ssh qw3100-device "journalctl -u qw3100 --since '2 hours ago'"
 
-### Ejemplos
-
-```bash
-# Default (5 segundos)
-./sensor_trident_modbus_ARM
-
-# Cada 2 segundos
-./sensor_trident_modbus_ARM --interval 2
-
-# Cada 30 segundos
-./sensor_trident_modbus_ARM -i 30
-```
-
-## 📥 Capturar Output
-
-### Opción 1: En Terminal SSH
-
-```bash
-ssh -p 2122 root@192.168.188.39 "/SD/sensor_trident_modbus_ARM -i 5" 
-
-# Salida típica (JSON o estructurada)
-```
-
-### Opción 2: Redirigir a Archivo Remoto
-
-```bash
-ssh -p 2122 root@192.168.188.39 \
-    "/SD/sensor_trident_modbus_ARM -i 5 > /SD/output.log 2>&1 &"
-
-# Descargar log después
-scp -P 2122 root@192.168.188.39:/SD/output.log ./output.log
-```
-
-### Opción 3: Redirigir a Local
-
-```bash
-ssh -p 2122 root@192.168.188.39 "/SD/sensor_trident_modbus_ARM -i 5" | \
-    tee local_output.log
-```
-
-## 🔗 Ejecución en Background (Daemon)
-
-Si deseas que el binario corra continuamente:
-
-```bash
-# Iniciar en background
-ssh -p 2122 root@192.168.188.39 \
-    "nohup /SD/sensor_trident_modbus_ARM -i 60 > /SD/sensor.log 2>&1 &"
-
-# Verificar que está corriendo
-ssh -p 2122 root@192.168.188.39 "ps aux | grep sensor_trident"
+# Reiniciar
+ssh qw3100-device "systemctl restart qw3100"
 
 # Detener
-ssh -p 2122 root@192.168.188.39 "pkill sensor_trident"
+ssh qw3100-device "systemctl stop qw3100"
 ```
 
-## 🛠️ Script de Deployment Automatizado
+---
 
-Crear archivo `deploy.sh`:
+## Ejecutar manualmente (sin systemd)
 
 ```bash
-#!/bin/bash
-
-set -e
-
-REMOTE_HOST="192.168.188.39"
-REMOTE_PORT="2122"
-REMOTE_USER="root"
-REMOTE_PATH="/SD"
-BINARY="sensor_trident_modbus_ARM"
-INTERVAL="${1:-5}"
-
-echo "🔨 Compilando ARM..."
-task "1. Compilar ARM" || arm-linux-gnueabihf-gcc \
-    ./src/*.c ./lib/cJSON.c \
-    -o "$BINARY" -static \
-    -I$PREFIX_ARM/include/modbus \
-    $PREFIX_ARM/lib/libmodbus.a
-
-echo "📤 Enviando por SCP..."
-scp -P "$REMOTE_PORT" "$BINARY" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/"
-
-echo "🚀 Ejecutando en dispositivo..."
-ssh -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" \
-    "$REMOTE_PATH/$BINARY --interval $INTERVAL"
-
-echo "✅ Done!"
+ssh qw3100-device
+./sensor_trident_modbus_ARM --config /SD/qw3100-config.json
 ```
 
-Uso:
+---
+
+## Directorio de pendientes
+
 ```bash
-chmod +x deploy.sh
-./deploy.sh 10  # interval de 10 seg
+# Ver cantidad de archivos acumulados
+ssh qw3100-device "ls /SD/pending/ | wc -l"
+
+# Vaciar (si se quiere reiniciar el backlog)
+ssh qw3100-device "rm -f /SD/pending/*.json"
 ```
 
-## 📋 Checklist de Deployment
+---
 
-- [ ] Binario compilado: `ls -la sensor_trident_modbus_ARM`
-- [ ] SSH accesible: `ssh -p 2122 root@192.168.188.39 'echo OK'`
-- [ ] Directorio remoto existe: `ssh ... 'ls /SD'`
-- [ ] SCP funciona: `scp -P 2122 sensor_trident_modbus_ARM ...`
-- [ ] Binario ejecutable en remoto: `ssh ... '/SD/sensor_trident_modbus_ARM --help'`
+## Notas de producción
 
-## 🐛 Troubleshooting
-
-### "Connection refused"
-```bash
-# Verificar dispositivo está encendido
-ping 192.168.188.39
-
-# Verificar SSH accesible
-ssh -p 2122 root@192.168.188.39 'echo OK'
-```
-
-### "Permission denied (publickey)"
-```bash
-# Verificar credenciales o SSH keys
-# Si no necesitas key, conectar:
-ssh -p 2122 root@192.168.188.39  # Pide contraseña
-```
-
-### "Permission denied" en archivo binario
-```bash
-# Hacer binario ejecutable
-ssh -p 2122 root@192.168.188.39 "chmod +x /SD/sensor_trident_modbus_ARM"
-```
-
-### "Segmentation fault" al ejecutar
-- Ver [Debugging](Debugging) para análisis con GDB remoto
-
-### Binario no termina (Ctrl+C no funciona)
-```bash
-# Terminar de otra terminal
-ssh -p 2122 root@192.168.188.39 "pkill -f sensor_trident"
-```
-
+- El binario imprime el JSON completo de cada ciclo en stdout — en producción esto va al journal y consume espacio. Considerar redirigir o filtrar con `journalctl --output=short`.
+- `interval_sec: 120` es el valor de producción (el sensor actualiza registros cada 120s).
+- El directorio `/SD/pending/` no tiene límite de archivos — con 7GB de almacenamiento y 1KB por JSON alcanza para ~26 años de datos sin envío.
