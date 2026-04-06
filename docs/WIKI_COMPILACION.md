@@ -4,7 +4,7 @@
 
 ```bash
 make          # compila binario ARM → sensor_trident_modbus_ARM
-make native   # compila tests nativos → test/main_test
+make devlinux # compila tests en el PC de desarrollo → test/main_test
 make deploy   # arm + scp al dispositivo
 make run      # deploy + ejecuta en el dispositivo vía SSH
 make clean    # elimina binarios generados
@@ -28,7 +28,7 @@ arm-linux-gnueabihf-gcc \
   $HOME/opt/libcurl-arm/lib/libcurl.a
 ```
 
-### Nativa (tests)
+### devlinux (tests en el PC de desarrollo)
 
 ```bash
 gcc \
@@ -36,9 +36,13 @@ gcc \
   src/persist.c src/http_sender.c lib/cJSON.c \
   -o test/main_test \
   -g -O0 -Wall -Wextra \
-  -I$HOME/opt/libmodbus-native/include/modbus \
-  $HOME/opt/libmodbus-native/lib/libmodbus.a -lcurl
+  -I$HOME/opt/libmodbus-devlinux/include/modbus \
+  -I$HOME/opt/libcurl-devlinux/include \
+  $HOME/opt/libmodbus-devlinux/lib/libmodbus.a \
+  $HOME/opt/libcurl-devlinux/lib/libcurl.a
 ```
+
+> **Nota:** Se usa libcurl estática propia (no `-lcurl` del sistema) para evitar "undefined reference" al linkear sin nghttp2/zlib/brotli. Ver WIKI_SETUP.md para compilarla.
 
 ---
 

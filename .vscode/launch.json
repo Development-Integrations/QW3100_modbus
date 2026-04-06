@@ -27,7 +27,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "Compilar binario Native para Pruebas ",
+            "preLaunchTask": "Compilar devlinux (pruebas en PC de desarrollo)",
             "miDebuggerPath": "/usr/bin/gdb"
         }
 

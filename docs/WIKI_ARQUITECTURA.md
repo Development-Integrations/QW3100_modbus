@@ -24,7 +24,6 @@ Arranque
   └── modbus_wait_first_sweep()   ← bloquea hasta sweepCount > 0
 
 while(1):
-  ├── [ciclo] LOG_INFO estado CB
   ├── read_block_modbus(addr=21)  → register_sensor_info[]
   ├── read_block_modbus(addr=79)  → register_sensor_Data[]
   ├── build_sensor_snapshot()     → SensorSnapshot
@@ -43,7 +42,7 @@ while(1):
 |--------|-----------|--------|-----------|
 | Info | 21–32 | 12 words | uptime, sn, fwMajor, fwMinor |
 | Data | 79–141 | 63 words | s0–s4 mag/phase/temp, oilTemp, boardTemp, rh |
-| sweepCount | 201 | 1 word | Indicador de primer barrido EIS completado |
+| sweepCount | 201 | 1 word | Contador de barridos EIS completado |
 
 ---
 

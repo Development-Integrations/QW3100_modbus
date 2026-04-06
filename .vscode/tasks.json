@@ -63,7 +63,7 @@
             }
         },
         {
-            "label": "Compilar Native (pruebas)",
+            "label": "Compilar devlinux (pruebas en PC de desarrollo)",
             "type": "shell",
             "command": "gcc",
             "args": [
@@ -76,9 +76,9 @@
                 "./lib/cJSON.c",
                 "-o", "./test/main_test",
                 "-g", "-O0", "-Wall", "-Wextra",
-                "-I/home/nesas-10/opt/libmodbus-native/include/modbus",
+                "-I/home/nesas-10/opt/libmodbus-devlinux/include/modbus",
                 "-I/usr/include/x86_64-linux-gnu",
-                "/home/nesas-10/opt/libmodbus-native/lib/libmodbus.a",
+                "/home/nesas-10/opt/libmodbus-devlinux/lib/libmodbus.a",
                 "-lcurl"
             ],
             "problemMatcher": ["$gcc"],

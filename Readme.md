@@ -26,7 +26,7 @@ make run
 | `arm-linux-gnueabihf-gcc` | `apt install gcc-arm-linux-gnueabihf` | Compilador cruzado |
 | `libmodbus` ARM estática | `$HOME/opt/libmodbus-arm/` | Comunicación Modbus RTU |
 | `libcurl` ARM estática (sin SSL) | `$HOME/opt/libcurl-arm/` | HTTP POST a API |
-| `libmodbus` nativa | `$HOME/opt/libmodbus-native/` | Tests locales |
+| `libmodbus` devlinux | `$HOME/opt/libmodbus-devlinux/` | Pruebas en el PC de desarrollo |
 
 Ver [docs/WIKI_SETUP.md](docs/WIKI_SETUP.md) para instrucciones de compilación de dependencias.
 
@@ -36,7 +36,7 @@ Ver [docs/WIKI_SETUP.md](docs/WIKI_SETUP.md) para instrucciones de compilación 
 
 ```bash
 make          # compila binario ARM → sensor_trident_modbus_ARM
-make native   # compila tests nativos → test/main_test
+make devlinux # compila tests en el PC de desarrollo → test/main_test
 make deploy   # arm + scp al dispositivo (requiere alias SSH)
 make run      # deploy + ejecuta vía SSH
 make clean    # elimina binarios
@@ -56,7 +56,7 @@ Host qw3100-device
 ```bash
 export PREFIX_ARM=$HOME/opt/libmodbus-arm
 export PREFIX_CURL=$HOME/opt/libcurl-arm
-export PREFIX_NATIVE=$HOME/opt/libmodbus-native
+export PREFIX_DEVLINUX=$HOME/opt/libmodbus-devlinux
 ```
 
 ---
@@ -226,10 +226,10 @@ Ver [deploy/qw3100-modbus.service](deploy/qw3100-modbus.service) para el unit fi
 
 ---
 
-## Tests nativos
+## Tests en el PC de desarrollo
 
 ```bash
-make native
+make devlinux
 ./test/main_test
 # All 40 tests passed.
 ```

@@ -199,13 +199,6 @@ int main(int argc, char *argv[])
 
     while (1)
     {
-        {
-            const char *s = (cb.state == CB_CLOSED)   ? "CLOSED"    :
-                            (cb.state == CB_OPEN)      ? "OPEN"      :
-                                                         "HALF_OPEN";
-            LOG_INFO("[ciclo] cb=%s fallos=%d", s, cb.fail_count);
-        }
-
         rc = read_block_modbus(ctx, 21, MODBUS_RANGE_SIZE(21, 32), register_sensor_info);
         if (rc == -1)
         {

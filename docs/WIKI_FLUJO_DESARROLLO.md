@@ -6,8 +6,8 @@
 # 1. Cambio en código
 vi src/modbus_comm.c
 
-# 2. Tests nativos
-make native && ./test/main_test
+# 2. Tests en el PC de desarrollo
+make devlinux && ./test/main_test
 
 # 3. Compilar ARM
 make arm
@@ -51,7 +51,7 @@ feat: Fase 5 — Makefile, systemd unit y observabilidad
 
 ## Antes de hacer deploy en producción
 
-- [ ] `make native && ./test/main_test` pasa los 40 tests
+- [ ] `make devlinux && ./test/main_test` pasa los 40 tests
 - [ ] `make arm` compila sin errores
 - [ ] Configuración en `/SD/qw3100-config.json` con credenciales reales
 - [ ] `interval_sec: 120` (no 10 como en pruebas)

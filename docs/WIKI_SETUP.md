@@ -31,13 +31,13 @@ ls $HOME/opt/libmodbus-arm/lib/libmodbus.a   # debe existir
 
 ---
 
-## Compilar libmodbus nativa (para tests)
+## Compilar libmodbus para el PC de desarrollo (devlinux)
 
 ```bash
 # En el mismo directorio de libmodbus clonado
 make distclean
 
-./configure --prefix=$HOME/opt/libmodbus-native --enable-static --disable-shared
+./configure --prefix=$HOME/opt/libmodbus-devlinux --enable-static --disable-shared
 make -j$(nproc)
 make install
 ```
@@ -78,12 +78,55 @@ ls $HOME/opt/libcurl-arm/lib/libcurl.a   # debe existir
 
 ## Variables de entorno
 
-Agregar a `~/.bashrc` o `~/.zshrc`:
+Estas son las variables que usa el Makefile (sobreescribibles vía entorno o `make VAR=valor`):
 
 ```bash
-export PREFIX_ARM=$HOME/opt/libmodbus-arm
-export PREFIX_CURL=$HOME/opt/libcurl-arm
-export PREFIX_NATIVE=$HOME/opt/libmodbus-native
+# ARM (cross-compile)
+PREFIX_MODBUS_ARM=$HOME/opt/libmodbus-arm
+PREFIX_CURL_ARM=$HOME/opt/libcurl-arm
+
+# devlinux (tests en el PC de desarrollo)
+PREFIX_MODBUS_DEVLINUX=$HOME/opt/libmodbus-devlinux
+PREFIX_CURL_DEVLINUX=$HOME/opt/libcurl-devlinux
+```
+
+---
+
+## Forma recomendada: script de setup
+
+El script `scripts/setup_dependencies_Sensor_Trident.sh` automatiza todo lo anterior (libmodbus + libcurl) para ambos targets:
+
+```bash
+./scripts/setup_dependencies_Sensor_Trident.sh arm       # para cross-compile ARM
+./scripts/setup_dependencies_Sensor_Trident.sh devlinux  # para tests en el PC de desarrollo
+```
+
+El script detecta si las librerías ya están compiladas y las omite, y valida que libcurl no tenga dependencias externas (nghttp2, zlib, etc.) que causarían errores al linkear estáticamente.
+
+---
+
+## Compilar libcurl para el PC de desarrollo (devlinux)
+
+La compilación devlinux también requiere libcurl estática propia (sin nghttp2/zlib/brotli), ya que `-lcurl` del sistema puede causar errores "undefined reference" al linkear en modo estático.
+
+```bash
+# Usar el script es lo más simple:
+./scripts/setup_dependencies_Sensor_Trident.sh devlinux
+
+# O manualmente, desde el directorio de fuentes de curl:
+./configure \
+  --prefix=$HOME/opt/libcurl-devlinux \
+  --enable-static \
+  --disable-shared \
+  --without-ssl \
+  --without-libpsl \
+  --without-zstd \
+  --without-brotli \
+  --without-zlib \
+  --without-libidn2 \
+  --without-nghttp2
+
+make -j$(nproc) && make install
 ```
 
 ---
@@ -116,9 +159,9 @@ arm-linux-gnueabihf-gcc --version
 # Librerías presentes
 ls $HOME/opt/libmodbus-arm/lib/libmodbus.a
 ls $HOME/opt/libcurl-arm/lib/libcurl.a
-ls $HOME/opt/libmodbus-native/lib/libmodbus.a
+ls $HOME/opt/libmodbus-devlinux/lib/libmodbus.a
 
 # Compilar y testear
-make native && ./test/main_test
+make devlinux && ./test/main_test
 make arm
 ```

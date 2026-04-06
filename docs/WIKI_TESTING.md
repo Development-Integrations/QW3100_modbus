@@ -1,9 +1,9 @@
 # Testing
 
-## Tests unitarios nativos
+## Tests en el PC de desarrollo (devlinux)
 
 ```bash
-make native
+make devlinux
 ./test/main_test
 # All 40 tests passed.
 ```
@@ -86,7 +86,6 @@ OPEN — reintentará en 300s   ← tope
 ## Interpretar los logs
 
 ```
-[INFO]  [ciclo] cb=CLOSED fallos=0    ← inicio de ciclo, estado CB
 [INFO]  [status] cb=CLOSED fallos=0 pendientes=5   ← fin de ciclo
 [WARN]  [cb] fallo transitorio 2/5    ← error recuperable
 [WARN]  [cb] OPEN — reintentará en 60 s

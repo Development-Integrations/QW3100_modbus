@@ -1,0 +1,40 @@
+root@NE-RCX-0000:~# ./sensor_trident_modbus_ARM
+[config] interval_sec : 12 s
+[config] config_path  : /SD/qw3100-config.json
+[config] serial_port  : /dev/ttymxc2
+[config] slave_id     : 1
+[config] persist_path : /SD/pending
+[config] api.enabled  : true
+[config] api.base_url : http://192.168.188.64:9090
+[config] fifo_max     : 10 archivos/ciclo
+[config] cb_threshold : 5 fallos
+[config] cb_timeout   : 60 s
+[config] cb_backoff   : 300 s max
+Connected to Modbus device successfully
+[2026-04-06 14:27:56] [INFO]  [warmup] esperando primer barrido EIS (timeout 150s, poll 10s)
+[2026-04-06 14:27:56] [INFO]  [warmup] sensor listo, sweepCount=541, elapsed=0s
+[2026-04-06 14:27:56] [INFO]  [ciclo] cb=CLOSED fallos=0
+Current time: 2026-04-06 14:27:56 {"name":"AP2200-Gateway","sn":100234,"fw":"1.20.3","data":[{"ts":1775503676,"type":"qw","uptime":52665,"sn":113901568,"fwMajor":1,"fwMinor":20,"sweepCount":541,"s0mag":2186896896,"s0phase":-18.460552215576172,"s0TempPre":29.701080322265625,"s0TempPost":29.667938232421875,"s1mag":342745664,"s1phase":-75.352989196777344,"s1TempPre":29.634796142578125,"s1TempPost":29.634796142578125,"s2mag":35639284,"s2phase":-87.50537109375,"s2TempPre":29.701080322265625,"s2TempPost":29.73419189453125,"s3mag":3708683.75,"s3phase":-88.8185806274414,"s3TempPre":29.73419189453125,"s3TempPost":29.701080322265625,"s4mag":38764.26171875,"s4phase":-81.5724411010742,"s4TempPre":29.701080322265625,"s4TempPost":29.701080322265625,"oilTemp":29.701080322265625,"boardTemp":4645,"rh":3121}]}
+[http] POST OK (200)
+[fifo] enviado y eliminado: 1775503676.json
+[2026-04-06 14:27:56] [INFO]  [status] cb=CLOSED fallos=0 pendientes=0
+[2026-04-06 14:28:08] [INFO]  [ciclo] cb=CLOSED fallos=0
+Current time: 2026-04-06 14:28:09 {"name":"AP2200-Gateway","sn":100234,"fw":"1.20.3","data":[{"ts":1775503689,"type":"qw","uptime":52677,"sn":113901568,"fwMajor":1,"fwMinor":20,"sweepCount":542,"s0mag":2186896896,"s0phase":-18.460552215576172,"s0TempPre":29.701080322265625,"s0TempPost":29.667938232421875,"s1mag":342745664,"s1phase":-75.352989196777344,"s1TempPre":29.634796142578125,"s1TempPost":29.634796142578125,"s2mag":35660392,"s2phase":-87.591224670410156,"s2TempPre":29.634796142578125,"s2TempPost":29.634796142578125,"s3mag":3712885,"s3phase":-88.8915023803711,"s3TempPre":29.634796142578125,"s3TempPost":29.634796142578125,"s4mag":38764.05078125,"s4phase":-81.577186584472656,"s4TempPre":29.634796142578125,"s4TempPost":29.634796142578125,"oilTemp":29.634796142578125,"boardTemp":4645,"rh":3118}]}
+[http] POST OK (200)
+[fifo] enviado y eliminado: 1775503689.json
+[2026-04-06 14:28:09] [INFO]  [status] cb=CLOSED fallos=0 pendientes=0
+[2026-04-06 14:28:21] [INFO]  [ciclo] cb=CLOSED fallos=0
+Current time: 2026-04-06 14:28:21 {"name":"AP2200-Gateway","sn":100234,"fw":"1.20.3","data":[{"ts":1775503701,"type":"qw","uptime":52689,"sn":113901568,"fwMajor":1,"fwMinor":20,"sweepCount":542,"s0mag":2186896896,"s0phase":-18.460552215576172,"s0TempPre":29.701080322265625,"s0TempPost":29.667938232421875,"s1mag":342745664,"s1phase":-75.352989196777344,"s1TempPre":29.634796142578125,"s1TempPost":29.634796142578125,"s2mag":35660392,"s2phase":-87.591224670410156,"s2TempPre":29.634796142578125,"s2TempPost":29.634796142578125,"s3mag":3712885,"s3phase":-88.8915023803711,"s3TempPre":29.634796142578125,"s3TempPost":29.634796142578125,"s4mag":38764.05078125,"s4phase":-81.577186584472656,"s4TempPre":29.634796142578125,"s4TempPost":29.634796142578125,"oilTemp":29.634796142578125,"boardTemp":4645,"rh":3118}]}
+[http] POST OK (200)
+[fifo] enviado y eliminado: 1775503701.json
+[2026-04-06 14:28:21] [INFO]  [status] cb=CLOSED fallos=0 pendientes=0
+[2026-04-06 14:28:33] [INFO]  [ciclo] cb=CLOSED fallos=0
+Current time: 2026-04-06 14:28:33 {"name":"AP2200-Gateway","sn":100234,"fw":"1.20.3","data":[{"ts":1775503713,"type":"qw","uptime":52701,"sn":113901568,"fwMajor":1,"fwMinor":20,"sweepCount":542,"s0mag":2186896896,"s0phase":-18.460552215576172,"s0TempPre":29.701080322265625,"s0TempPost":29.667938232421875,"s1mag":342745664,"s1phase":-75.352989196777344,"s1TempPre":29.634796142578125,"s1TempPost":29.634796142578125,"s2mag":35660392,"s2phase":-87.591224670410156,"s2TempPre":29.634796142578125,"s2TempPost":29.634796142578125,"s3mag":3712885,"s3phase":-88.8915023803711,"s3TempPre":29.634796142578125,"s3TempPost":29.634796142578125,"s4mag":38764.05078125,"s4phase":-81.577186584472656,"s4TempPre":29.634796142578125,"s4TempPost":29.634796142578125,"oilTemp":29.634796142578125,"boardTemp":4645,"rh":3118}]}
+[http] POST OK (200)
+[fifo] enviado y eliminado: 1775503713.json
+[2026-04-06 14:28:33] [INFO]  [status] cb=CLOSED fallos=0 pendientes=0
+[2026-04-06 14:28:45] [INFO]  [ciclo] cb=CLOSED fallos=0
+Current time: 2026-04-06 14:28:45 {"name":"AP2200-Gateway","sn":100234,"fw":"1.20.3","data":[{"ts":1775503725,"type":"qw","uptime":52714,"sn":113901568,"fwMajor":1,"fwMinor":20,"sweepCount":542,"s0mag":2186896896,"s0phase":-18.460552215576172,"s0TempPre":29.701080322265625,"s0TempPost":29.667938232421875,"s1mag":342745664,"s1phase":-75.352989196777344,"s1TempPre":29.634796142578125,"s1TempPost":29.634796142578125,"s2mag":35660392,"s2phase":-87.591224670410156,"s2TempPre":29.634796142578125,"s2TempPost":29.634796142578125,"s3mag":3712885,"s3phase":-88.8915023803711,"s3TempPre":29.634796142578125,"s3TempPost":29.634796142578125,"s4mag":38764.05078125,"s4phase":-81.577186584472656,"s4TempPre":29.634796142578125,"s4TempPost":29.634796142578125,"oilTemp":29.634796142578125,"boardTemp":4638,"rh":3118}]}
+[http] POST OK (200)
+[fifo] enviado y eliminado: 1775503725.json
+[2026-04-06 14:28:45] [INFO]  [status] cb=CLOSED fallos=0 pendientes=0

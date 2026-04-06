@@ -10,3 +10,4 @@ main_test
 lib/curl/
 lib/libmodbus/
 lib/vcpkg/
+ltmain.sh
