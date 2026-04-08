@@ -6,8 +6,20 @@ sensor_trident_modbus_ARM
 test/main_test
 main_test
 
+# Directorio temporal de compilación de dependencias (fuentes descargadas)
+_deps_build/
+
+# third_party/ es generado por scripts/build_third_party.sh — no se versiona
+third_party/
+
+# Directorios de build de Meson
+build-arm/
+build-devlinux/
+build/
+
 # Dependencias externas compiladas (no se versionan)
 lib/curl/
 lib/libmodbus/
+lib/mosquitto/
 lib/vcpkg/
 ltmain.sh

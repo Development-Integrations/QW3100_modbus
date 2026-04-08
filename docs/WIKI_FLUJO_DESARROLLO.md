@@ -7,7 +7,7 @@
 vi src/modbus_comm.c
 
 # 2. Tests en el PC de desarrollo
-make devlinux && ./test/main_test
+make test
 
 # 3. Compilar ARM
 make arm
@@ -31,14 +31,8 @@ feat:  nueva funcionalidad
 fix:   corrección de bug
 docs:  cambios en documentación
 test:  cambios en tests
+chore: mantenimiento (deps, build, config)
 refactor: refactoring sin cambio de comportamiento
-```
-
-Ejemplos del proyecto:
-```
-feat: reconexión verificada, warmup EIS y observabilidad de ciclo
-fix: agregar http_sender.c a SRCS_TEST en Makefile
-feat: Fase 5 — Makefile, systemd unit y observabilidad
 ```
 
 ---
@@ -51,11 +45,12 @@ feat: Fase 5 — Makefile, systemd unit y observabilidad
 
 ## Antes de hacer deploy en producción
 
-- [ ] `make devlinux && ./test/main_test` pasa los 40 tests
+- [ ] `make test` pasa todos los tests sin errores
 - [ ] `make arm` compila sin errores
+- [ ] `ldd sensor_trident_modbus_ARM` → `not a dynamic executable`
 - [ ] Configuración en `/SD/qw3100-config.json` con credenciales reales
-- [ ] `interval_sec: 120` (no 10 como en pruebas)
-- [ ] `api.enabled: true`
+- [ ] `interval_sec: 120` (no 10 o 12 como en pruebas)
+- [ ] Interfaz activa (`api` o `mqtt`) y credenciales correspondientes configuradas
 - [ ] Servicio systemd activo: `systemctl status qw3100`
 
 ---
@@ -69,12 +64,17 @@ El sensor no respondió dentro de los 150s de warmup. Causas posibles:
 - `slave_id` incorrecto en config
 - `serial_port` incorrecto (`/dev/ttymxc2` en el dispositivo)
 
-### CB nunca pasa a CLOSED
+### CB nunca pasa a CLOSED (API)
 
-La API no está devolviendo 200 en el HALF_OPEN. Verificar:
+La API no devuelve 200 en el HALF_OPEN. Verificar:
 - `api.base_url` alcanzable desde el dispositivo
 - Credenciales (`scante_token`, `scante_appid`, etc.) correctas
-- `curl -X POST <base_url>/IOTData?...` manual desde el dispositivo
+
+### CB nunca pasa a CLOSED (MQTT)
+
+- Verificar que los archivos de certificados existen en las rutas configuradas
+- Verificar conectividad al broker: `mosquitto_pub -h <broker> -p 8883 --cafile /SD/certs/root-CA.crt ...`
+- Si `ca_path` está vacío: conecta sin TLS (solo para pruebas locales)
 
 ### Archivos se acumulan en `/SD/pending/` sin enviarse
 
@@ -82,8 +82,8 @@ La API no está devolviendo 200 en el HALF_OPEN. Verificar:
 # Ver estado del CB
 journalctl -u qw3100 | grep status | tail -5
 
-# Ver último error HTTP
-journalctl -u qw3100 | grep "curl error\|POST OK" | tail -10
+# Ver último error
+journalctl -u qw3100 | grep -E "curl error|mqtt|POST OK" | tail -10
 ```
 
 ### "Text file busy" al hacer scp

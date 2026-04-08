@@ -4,45 +4,31 @@
 
 ```bash
 make          # compila binario ARM → sensor_trident_modbus_ARM
-make devlinux # compila tests en el PC de desarrollo → test/main_test
+make devlinux # compila tests en el PC de desarrollo
+make test     # devlinux + ejecuta tests
 make deploy   # arm + scp al dispositivo
 make run      # deploy + ejecuta en el dispositivo vía SSH
-make clean    # elimina binarios generados
+make clean    # elimina build-arm/ build-devlinux/ y el binario
 ```
+
+El Makefile es un wrapper delgado sobre Meson. Internamente usa:
+- `build-arm/` — directorio de build ARM (cross-compile)
+- `build-devlinux/` — directorio de build nativo (tests)
 
 ---
 
-## Comandos manuales
-
-### ARM (cross-compile)
+## Meson directamente
 
 ```bash
-arm-linux-gnueabihf-gcc \
-  src/main.c src/sensor.c src/modbus_comm.c src/config.c \
-  src/persist.c src/http_sender.c src/circuit_breaker.c lib/cJSON.c \
-  -o sensor_trident_modbus_ARM \
-  -static -Wall -Wextra \
-  -I$HOME/opt/libmodbus-arm/include/modbus \
-  -I$HOME/opt/libcurl-arm/include \
-  $HOME/opt/libmodbus-arm/lib/libmodbus.a \
-  $HOME/opt/libcurl-arm/lib/libcurl.a
+# ARM
+meson setup build-arm --cross-file cross/armv7.ini
+meson compile -C build-arm
+
+# devlinux (tests)
+meson setup build-devlinux
+meson compile -C build-devlinux
+meson test -C build-devlinux
 ```
-
-### devlinux (tests en el PC de desarrollo)
-
-```bash
-gcc \
-  test/main_test.c src/sensor.c src/modbus_comm.c src/config.c \
-  src/persist.c src/http_sender.c lib/cJSON.c \
-  -o test/main_test \
-  -g -O0 -Wall -Wextra \
-  -I$HOME/opt/libmodbus-devlinux/include/modbus \
-  -I$HOME/opt/libcurl-devlinux/include \
-  $HOME/opt/libmodbus-devlinux/lib/libmodbus.a \
-  $HOME/opt/libcurl-devlinux/lib/libcurl.a
-```
-
-> **Nota:** Se usa libcurl estática propia (no `-lcurl` del sistema) para evitar "undefined reference" al linkear sin nghttp2/zlib/brotli. Ver WIKI_SETUP.md para compilarla.
 
 ---
 
@@ -62,7 +48,7 @@ ldd sensor_trident_modbus_ARM
 
 ## Warnings esperados
 
-Al compilar estáticamente con libcurl aparecen estos warnings — son inofensivos:
+Al compilar estáticamente con libcurl aparece este warning — es inofensivo:
 
 ```
 warning: Using 'getaddrinfo' in statically linked applications requires

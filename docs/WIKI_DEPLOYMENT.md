@@ -34,6 +34,11 @@ vi /SD/qw3100-config.json
     "serial_port": "/dev/ttymxc2",
     "slave_id": 1,
     "persist_path": "/SD/pending",
+    "persist_sent_path": "/SD/sent",
+
+    "web_interface": {
+        "primary": "api"
+    },
 
     "api": {
         "enabled": true,
@@ -42,11 +47,25 @@ vi /SD/qw3100-config.json
         "pull_type_guid": "<pull_type_guid_real>",
         "scante_token": "<token_real>",
         "scante_appid": "<appid_real>",
-        "scante_sgid": "<sgid_real>"
+        "scante_sgid": "<sgid_real>",
+        "ca_bundle_path": ""
+    },
+
+    "mqtt": {
+        "enabled": false,
+        "broker_url": "<endpoint>.iot.<region>.amazonaws.com",
+        "port": 8883,
+        "thing_name": "<thing_name>",
+        "cert_path": "/SD/certs/device.crt",
+        "key_path": "/SD/certs/device.key",
+        "ca_path": "/SD/certs/root-CA.crt",
+        "connect_timeout_sec": 10,
+        "keepalive_sec": 60
     },
 
     "send": {
         "fifo_max_per_cycle": 10,
+        "sent_retention_count": 1000,
         "cb_fail_threshold": 5,
         "cb_open_timeout_sec": 60,
         "cb_backoff_max_sec": 300
@@ -122,4 +141,5 @@ ssh qw3100-device "rm -f /SD/pending/*.json"
 
 - El binario imprime el JSON completo de cada ciclo en stdout — en producción esto va al journal y consume espacio. Considerar redirigir o filtrar con `journalctl --output=short`.
 - `interval_sec: 120` es el valor de producción (el sensor actualiza registros cada 120s).
+- Los JSONs enviados se mueven a `/SD/sent/` y se rotan automáticamente al superar `sent_retention_count` (default 1000 archivos).
 - El directorio `/SD/pending/` no tiene límite de archivos — con 7GB de almacenamiento y 1KB por JSON alcanza para ~26 años de datos sin envío.

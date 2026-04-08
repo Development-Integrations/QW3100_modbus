@@ -10,6 +10,7 @@ typedef struct
     char scante_token[64];
     char scante_appid[64];
     char scante_sgid[64];
+    char ca_bundle_path[256];   /* Ruta al CA bundle. Vacío = usar default del sistema */
 } HttpConfig;
 
 typedef enum

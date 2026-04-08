@@ -58,6 +58,8 @@ void config_init(AppConfig *cfg)
     cfg->slave_id = CONFIG_DEFAULT_SLAVE_ID;
     strncpy(cfg->persist_path, CONFIG_DEFAULT_PERSIST_PATH, sizeof(cfg->persist_path) - 1);
     cfg->persist_path[sizeof(cfg->persist_path) - 1] = '\0';
+    strncpy(cfg->persist_sent_path, CONFIG_DEFAULT_PERSIST_SENT_PATH, sizeof(cfg->persist_sent_path) - 1);
+    cfg->persist_sent_path[sizeof(cfg->persist_sent_path) - 1] = '\0';
 
     /* API defaults: deshabilitada, campos vacíos */
     cfg->api.enabled = 0;
@@ -67,12 +69,30 @@ void config_init(AppConfig *cfg)
     cfg->api.scante_token[0]    = '\0';
     cfg->api.scante_appid[0]    = '\0';
     cfg->api.scante_sgid[0]     = '\0';
+    cfg->api.ca_bundle_path[0]  = '\0'; /* vacío = usar CA bundle del sistema */
+
+    /* MQTT defaults: deshabilitado, campos vacíos */
+    cfg->mqtt.enabled              = 0;
+    cfg->mqtt.port                 = 8883;
+    cfg->mqtt.connect_timeout_sec  = 10;
+    cfg->mqtt.keepalive_sec        = 60;
+    cfg->mqtt.broker_url[0]        = '\0';
+    cfg->mqtt.thing_name[0]        = '\0';
+    cfg->mqtt.cert_path[0]         = '\0';
+    cfg->mqtt.key_path[0]          = '\0';
+    cfg->mqtt.ca_path[0]           = '\0';
+
+    /* Interfaz principal */
+    strncpy(cfg->primary_interface, CONFIG_DEFAULT_PRIMARY_INTERFACE,
+            sizeof(cfg->primary_interface) - 1);
+    cfg->primary_interface[sizeof(cfg->primary_interface) - 1] = '\0';
 
     /* Send / circuit breaker defaults */
-    cfg->send.fifo_max_per_cycle  = CONFIG_DEFAULT_FIFO_MAX_PER_CYCLE;
-    cfg->send.cb_fail_threshold   = CONFIG_DEFAULT_CB_FAIL_THRESHOLD;
-    cfg->send.cb_open_timeout_sec = CONFIG_DEFAULT_CB_OPEN_TIMEOUT;
-    cfg->send.cb_backoff_max_sec  = CONFIG_DEFAULT_CB_BACKOFF_MAX;
+    cfg->send.fifo_max_per_cycle   = CONFIG_DEFAULT_FIFO_MAX_PER_CYCLE;
+    cfg->send.cb_fail_threshold    = CONFIG_DEFAULT_CB_FAIL_THRESHOLD;
+    cfg->send.cb_open_timeout_sec  = CONFIG_DEFAULT_CB_OPEN_TIMEOUT;
+    cfg->send.cb_backoff_max_sec   = CONFIG_DEFAULT_CB_BACKOFF_MAX;
+    cfg->send.sent_retention_count = CONFIG_DEFAULT_SENT_RETENTION_COUNT;
 }
 
 ConfigFileResult config_load_file(AppConfig *cfg)
@@ -171,6 +191,20 @@ ConfigFileResult config_load_file(AppConfig *cfg)
         cfg->persist_path[sizeof(cfg->persist_path) - 1] = '\0';
     }
 
+    /* Leer "persist_sent_path" si existe */
+    cJSON *sent_path_item = cJSON_GetObjectItemCaseSensitive(root, "persist_sent_path");
+    if (sent_path_item != NULL)
+    {
+        if (!cJSON_IsString(sent_path_item) || sent_path_item->valuestring == NULL)
+        {
+            fprintf(stderr, "[config] 'persist_sent_path' debe ser una cadena\n");
+            cJSON_Delete(root);
+            return CONFIG_FILE_INVALID_VALUE;
+        }
+        strncpy(cfg->persist_sent_path, sent_path_item->valuestring, sizeof(cfg->persist_sent_path) - 1);
+        cfg->persist_sent_path[sizeof(cfg->persist_sent_path) - 1] = '\0';
+    }
+
     /* Leer objeto "api" si existe */
     cJSON *api = cJSON_GetObjectItemCaseSensitive(root, "api");
     if (api != NULL)
@@ -194,7 +228,65 @@ ConfigFileResult config_load_file(AppConfig *cfg)
         PARSE_STR("scante_token",   scante_token);
         PARSE_STR("scante_appid",   scante_appid);
         PARSE_STR("scante_sgid",    scante_sgid);
+        PARSE_STR("ca_bundle_path", ca_bundle_path);
 #undef PARSE_STR
+    }
+
+    /* Leer "web_interface.primary" si existe */
+    cJSON *web_iface = cJSON_GetObjectItemCaseSensitive(root, "web_interface");
+    if (web_iface != NULL)
+    {
+        cJSON *primary = cJSON_GetObjectItemCaseSensitive(web_iface, "primary");
+        if (cJSON_IsString(primary) && primary->valuestring != NULL)
+        {
+            if (strcmp(primary->valuestring, "api") != 0 &&
+                strcmp(primary->valuestring, "mqtt") != 0)
+            {
+                fprintf(stderr, "[config] 'web_interface.primary' debe ser \"api\" o \"mqtt\"\n");
+                cJSON_Delete(root);
+                return CONFIG_FILE_INVALID_VALUE;
+            }
+            strncpy(cfg->primary_interface, primary->valuestring,
+                    sizeof(cfg->primary_interface) - 1);
+            cfg->primary_interface[sizeof(cfg->primary_interface) - 1] = '\0';
+        }
+    }
+
+    /* Leer objeto "mqtt" si existe */
+    cJSON *mqtt = cJSON_GetObjectItemCaseSensitive(root, "mqtt");
+    if (mqtt != NULL)
+    {
+        cJSON *enabled = cJSON_GetObjectItemCaseSensitive(mqtt, "enabled");
+        if (cJSON_IsBool(enabled))
+            cfg->mqtt.enabled = cJSON_IsTrue(enabled) ? 1 : 0;
+
+        cJSON *port_item = cJSON_GetObjectItemCaseSensitive(mqtt, "port");
+        if (port_item != NULL && cJSON_IsNumber(port_item))
+            cfg->mqtt.port = (int)port_item->valuedouble;
+
+        cJSON *timeout_item = cJSON_GetObjectItemCaseSensitive(mqtt, "connect_timeout_sec");
+        if (timeout_item != NULL && cJSON_IsNumber(timeout_item))
+            cfg->mqtt.connect_timeout_sec = (uint32_t)timeout_item->valuedouble;
+
+        cJSON *ka_item = cJSON_GetObjectItemCaseSensitive(mqtt, "keepalive_sec");
+        if (ka_item != NULL && cJSON_IsNumber(ka_item))
+            cfg->mqtt.keepalive_sec = (uint32_t)ka_item->valuedouble;
+
+#define PARSE_MQTT_STR(key, field) \
+    do { \
+        cJSON *_it = cJSON_GetObjectItemCaseSensitive(mqtt, key); \
+        if (cJSON_IsString(_it) && _it->valuestring) { \
+            strncpy(cfg->mqtt.field, _it->valuestring, sizeof(cfg->mqtt.field) - 1); \
+            cfg->mqtt.field[sizeof(cfg->mqtt.field) - 1] = '\0'; \
+        } \
+    } while (0)
+
+        PARSE_MQTT_STR("broker_url",  broker_url);
+        PARSE_MQTT_STR("thing_name",  thing_name);
+        PARSE_MQTT_STR("cert_path",   cert_path);
+        PARSE_MQTT_STR("key_path",    key_path);
+        PARSE_MQTT_STR("ca_path",     ca_path);
+#undef PARSE_MQTT_STR
     }
 
     /* Leer objeto "send" si existe */
@@ -234,6 +326,20 @@ ConfigFileResult config_load_file(AppConfig *cfg)
 
 #undef PARSE_UINT8
 #undef PARSE_UINT32
+
+        /* sent_retention_count es uint16, sin macro genérica — parsear directo */
+        cJSON *ret_item = cJSON_GetObjectItemCaseSensitive(send, "sent_retention_count");
+        if (ret_item != NULL)
+        {
+            if (!cJSON_IsNumber(ret_item) ||
+                ret_item->valuedouble < 1.0 || ret_item->valuedouble > 65535.0)
+            {
+                fprintf(stderr, "[config] 'sent_retention_count' debe ser entero 1..65535\n");
+                cJSON_Delete(root);
+                return CONFIG_FILE_INVALID_VALUE;
+            }
+            cfg->send.sent_retention_count = (uint16_t)ret_item->valuedouble;
+        }
     }
 
     cJSON_Delete(root);
@@ -290,9 +396,22 @@ void config_print(const AppConfig *cfg)
     printf("[config] serial_port  : %s\n",   cfg->serial_port);
     printf("[config] slave_id     : %u\n",   cfg->slave_id);
     printf("[config] persist_path : %s\n",   cfg->persist_path);
+    printf("[config] persist_sent : %s\n",   cfg->persist_sent_path);
+    printf("[config] sent_retain  : %u archivos\n", cfg->send.sent_retention_count);
     printf("[config] api.enabled  : %s\n",   cfg->api.enabled ? "true" : "false");
     if (cfg->api.enabled)
+    {
         printf("[config] api.base_url : %s\n", cfg->api.base_url);
+        printf("[config] api.ca_bundle: %s\n",
+               cfg->api.ca_bundle_path[0] ? cfg->api.ca_bundle_path : "(sistema)");
+    }
+    printf("[config] primary_iface: %s\n",   cfg->primary_interface);
+    printf("[config] mqtt.enabled : %s\n",   cfg->mqtt.enabled ? "true" : "false");
+    if (cfg->mqtt.enabled)
+    {
+        printf("[config] mqtt.broker  : %s:%d\n", cfg->mqtt.broker_url, cfg->mqtt.port);
+        printf("[config] mqtt.thing   : %s\n",    cfg->mqtt.thing_name);
+    }
     printf("[config] fifo_max     : %u archivos/ciclo\n", cfg->send.fifo_max_per_cycle);
     printf("[config] cb_threshold : %u fallos\n",         cfg->send.cb_fail_threshold);
     printf("[config] cb_timeout   : %u s\n",              cfg->send.cb_open_timeout_sec);

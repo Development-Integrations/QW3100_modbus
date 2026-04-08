@@ -1,19 +1,22 @@
 # QW3100 Modbus — Sensor Gateway
 
-Daemon C embebido para Linux ARM que simula el comportamiento de un gateway Poseidon AP2200. Lee datos del sensor QW3100 vía Modbus RTU, los persiste localmente y los envía a la API Scante con reintentos, cola FIFO y circuit breaker.
+Daemon C embebido para Linux ARM que simula el comportamiento de un gateway Poseidon AP2200. Lee datos del sensor QW3100 vía Modbus RTU, los persiste localmente y los envía a la API Scante (HTTP) o AWS IoT Core (MQTT) con reintentos, cola FIFO y circuit breaker.
 
 ---
 
 ## Inicio rápido
 
 ```bash
-# 1. Compilar para ARM
+# 1. Compilar dependencias ARM (una sola vez)
+./scripts/build_third_party.sh
+
+# 2. Compilar para ARM
 make
 
-# 2. Enviar al dispositivo
+# 3. Enviar al dispositivo
 make deploy
 
-# 3. Ejecutar en el dispositivo
+# 4. Ejecutar en el dispositivo
 make run
 ```
 
@@ -21,14 +24,16 @@ make run
 
 ## Requisitos de compilación
 
-| Dependencia | Ruta | Propósito |
-|-------------|------|-----------|
-| `arm-linux-gnueabihf-gcc` | `apt install gcc-arm-linux-gnueabihf` | Compilador cruzado |
-| `libmodbus` ARM estática | `$HOME/opt/libmodbus-arm/` | Comunicación Modbus RTU |
-| `libcurl` ARM estática (sin SSL) | `$HOME/opt/libcurl-arm/` | HTTP POST a API |
-| `libmodbus` devlinux | `$HOME/opt/libmodbus-devlinux/` | Pruebas en el PC de desarrollo |
+```bash
+# Toolchain ARM + build tools
+sudo apt install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
+    binutils-arm-linux-gnueabihf meson ninja-build cmake git perl
 
-Ver [docs/WIKI_SETUP.md](docs/WIKI_SETUP.md) para instrucciones de compilación de dependencias.
+# Paquetes devlinux (para tests en el PC de desarrollo)
+sudo apt install libmodbus-dev libcurl4-openssl-dev libmosquitto-dev libssl-dev
+```
+
+Ver [docs/WIKI_SETUP.md](docs/WIKI_SETUP.md) para instrucciones completas.
 
 ---
 
@@ -36,10 +41,10 @@ Ver [docs/WIKI_SETUP.md](docs/WIKI_SETUP.md) para instrucciones de compilación 
 
 ```bash
 make          # compila binario ARM → sensor_trident_modbus_ARM
-make devlinux # compila tests en el PC de desarrollo → test/main_test
+make test     # compila y ejecuta tests en el PC de desarrollo
 make deploy   # arm + scp al dispositivo (requiere alias SSH)
 make run      # deploy + ejecuta vía SSH
-make clean    # elimina binarios
+make clean    # elimina build-arm/ build-devlinux/ y binario
 ```
 
 **Alias SSH requerido** (`~/.ssh/config`):
@@ -49,14 +54,6 @@ Host qw3100-device
   HostName <IP_DEL_DISPOSITIVO>
   Port 2122
   User root
-```
-
-**Variables de entorno (opcionales, tienen defaults):**
-
-```bash
-export PREFIX_ARM=$HOME/opt/libmodbus-arm
-export PREFIX_CURL=$HOME/opt/libcurl-arm
-export PREFIX_DEVLINUX=$HOME/opt/libmodbus-devlinux
 ```
 
 ---
@@ -73,6 +70,11 @@ Todos los campos son opcionales — si no están presentes se usan los valores p
     "serial_port": "/dev/ttymxc2",
     "slave_id": 1,
     "persist_path": "/SD/pending",
+    "persist_sent_path": "/SD/sent",
+
+    "web_interface": {
+        "primary": "api"
+    },
 
     "api": {
         "enabled": true,
@@ -81,11 +83,25 @@ Todos los campos son opcionales — si no están presentes se usan los valores p
         "pull_type_guid": "<pull_type_guid>",
         "scante_token": "<token>",
         "scante_appid": "<appid>",
-        "scante_sgid": "<sgid>"
+        "scante_sgid": "<sgid>",
+        "ca_bundle_path": ""
+    },
+
+    "mqtt": {
+        "enabled": false,
+        "broker_url": "<endpoint>.iot.<region>.amazonaws.com",
+        "port": 8883,
+        "thing_name": "<thing_name>",
+        "cert_path": "/SD/certs/device.crt",
+        "key_path": "/SD/certs/device.key",
+        "ca_path": "/SD/certs/root-CA.crt",
+        "connect_timeout_sec": 10,
+        "keepalive_sec": 60
     },
 
     "send": {
         "fifo_max_per_cycle": 10,
+        "sent_retention_count": 1000,
         "cb_fail_threshold": 5,
         "cb_open_timeout_sec": 60,
         "cb_backoff_max_sec": 300
@@ -97,21 +113,27 @@ Todos los campos son opcionales — si no están presentes se usan los valores p
 
 | Campo | Default | Descripción |
 |-------|---------|-------------|
-| `interval_sec` | `120` | Intervalo entre lecturas del sensor (segundos) |
+| `interval_sec` | `120` | Intervalo entre lecturas (segundos) |
 | `serial_port` | `/dev/ttymxc2` | Puerto RS485 para Modbus RTU |
 | `slave_id` | `1` | ID del slave Modbus |
 | `persist_path` | `/SD/pending` | Directorio para JSONs pendientes de envío |
+| `persist_sent_path` | `/SD/sent` | Directorio para JSONs ya enviados |
+| `web_interface.primary` | `api` | Interfaz principal (`api` o `mqtt`) |
 | `api.enabled` | `true` | Habilita/deshabilita el envío HTTP |
 | `api.base_url` | — | URL base de la API Scante |
-| `api.item_guid` | — | GUID del item en la plataforma |
-| `api.pull_type_guid` | — | GUID del tipo de pull |
-| `api.scante_token` | — | Token de autenticación |
-| `api.scante_appid` | — | App ID de la plataforma |
-| `api.scante_sgid` | — | Subgroup ID |
-| `send.fifo_max_per_cycle` | `10` | Máximo de archivos pendientes a enviar por ciclo |
-| `send.cb_fail_threshold` | `5` | Fallos consecutivos para abrir el circuit breaker |
-| `send.cb_open_timeout_sec` | `60` | Tiempo de espera inicial antes del primer reintento (s) |
-| `send.cb_backoff_max_sec` | `300` | Tope máximo del backoff exponencial (s) |
+| `api.ca_bundle_path` | `""` | CA bundle para TLS; vacío = CA del sistema |
+| `mqtt.enabled` | `false` | Habilita/deshabilita MQTT |
+| `mqtt.broker_url` | — | Endpoint del broker MQTT |
+| `mqtt.port` | `8883` | Puerto del broker |
+| `mqtt.thing_name` | — | Nombre del Thing en AWS IoT |
+| `mqtt.ca_path` | — | CA del broker; vacío = sin TLS |
+| `mqtt.cert_path` | — | Certificado del cliente (mTLS, opcional) |
+| `mqtt.key_path` | — | Clave privada del cliente (mTLS, opcional) |
+| `send.fifo_max_per_cycle` | `10` | Archivos pendientes a enviar por ciclo |
+| `send.sent_retention_count` | `1000` | Máximo de archivos en `sent/` (rotación FIFO) |
+| `send.cb_fail_threshold` | `5` | Fallos para abrir el circuit breaker |
+| `send.cb_open_timeout_sec` | `60` | Timeout inicial antes del primer reintento |
+| `send.cb_backoff_max_sec` | `300` | Tope del backoff exponencial |
 
 ### Override por CLI
 
@@ -129,13 +151,12 @@ Arranque
   └─ modbus_wait_first_sweep()   ← espera hasta sweepCount > 0 (máx 150s)
 
 while(1):
-  ├─ [ciclo] LOG_INFO cb=STATE fallos=N
   ├─ read_block_modbus(addr=21)  ← info block (uptime, fw, sn...)
   ├─ read_block_modbus(addr=79)  ← data block (mag, phase, temp, rh...)
   ├─ build_gateway_payload_json()
   ├─ persist_write()             ← guarda <ts>.json en /SD/pending/
-  ├─ try_send_pending()          ← envía FIFO con circuit breaker
-  ├─ [status] LOG_INFO cb=STATE pendientes=N
+  ├─ try_send_pending()          ← envía FIFO con circuit breaker y failover
+  ├─ [status] primary=X  cb_api=Y  cb_mqtt=Z  pendientes=N
   └─ sleep(interval_sec)
 ```
 
@@ -143,7 +164,7 @@ while(1):
 
 ## Circuit breaker
 
-Protege el canal HTTP ante fallos continuos. Evita reintentos que saturen la red celular.
+Hay dos instancias independientes (`cb_api` y `cb_mqtt`). Si la interfaz principal abre su CB y la alternativa está habilitada, el daemon hace failover automático.
 
 | Estado | Comportamiento |
 |--------|---------------|
@@ -153,13 +174,25 @@ Protege el canal HTTP ante fallos continuos. Evita reintentos que saturen la red
 
 **Backoff exponencial** en cada reapertura: `60s → 120s → 240s → 300s (tope)`
 
-**Clasificación de errores HTTP:**
+| Código/Error | Tipo | Acción |
+|--------------|------|--------|
+| `200` / MQTT ACK | Éxito | `cb_on_success()` → CLOSED |
+| `5xx` / timeout / MQTT connect error | Transitorio | Cuenta hacia apertura del CB |
+| `4xx` / MQTT build error | Persistente | Apertura inmediata del CB |
 
-| Código | Tipo | Acción |
-|--------|------|--------|
-| `200` | Éxito | `cb_on_success()` → CLOSED |
-| `5xx` / timeout | Transitorio | Cuenta hacia apertura del CB |
-| `400` / `401` / `403` | Persistente | Apertura inmediata del CB |
+---
+
+## MQTT — formato del payload
+
+Los mensajes se publican en `$aws/things/<thing_name>/shadow/update` con formato AWS Device Shadow:
+
+```json
+{
+  "state": { "reported": <payload_canónico_gateway> },
+  "clientToken": "<thing_name>-<timestamp>",
+  "version": 1
+}
+```
 
 ---
 
@@ -167,22 +200,20 @@ Protege el canal HTTP ante fallos continuos. Evita reintentos que saturen la red
 
 `read_block_modbus()` distingue dos tipos de fallo:
 
-- **Excepción Modbus** (`Illegal function`, `Slave busy`): el slave responde pero no está listo — espera sin cerrar la conexión.
+- **Excepción Modbus** (`Illegal function`, `Slave busy`): espera sin cerrar la conexión.
 - **Timeout / fallo de bus**: cierra el puerto, reconecta y verifica con una lectura real.
 
-Backoff: `2s → 4s → 8s → 16s → 32s` (5 intentos). Si agota → el ciclo continúa en el próximo `interval_sec`.
+Backoff: `2s → 4s → 8s → 16s → 32s` (5 intentos).
 
 ---
 
 ## Warmup del sensor
 
-El QW3100 tarda ~120s en completar su primer barrido EIS al energizarse. El daemon espera activamente antes de iniciar la captura:
+El QW3100 tarda ~120s en completar su primer barrido EIS al energizarse:
 
 ```
 [INFO]  [warmup] esperando primer barrido EIS (timeout 150s, poll 10s)
-[INFO]  [warmup] registro no disponible aún (Illegal function, 0s)
 [INFO]  [warmup] sensor responde, aún procesando sweepCount=0 (20s)
-...
 [INFO]  [warmup] sensor listo, sweepCount=1, elapsed=110s
 ```
 
@@ -190,48 +221,11 @@ Si el daemon se reinicia con el sensor ya encendido, el warmup retorna inmediata
 
 ---
 
-## Logs
-
-Todos los mensajes incluyen timestamp ISO 8601 y nivel de severidad:
-
-```
-[2026-03-28 09:37:53] [INFO]  [ciclo] cb=OPEN fallos=5
-[2026-03-28 09:37:53] [WARN]  [cb] OPEN — envío pausado (47 s restantes)
-[2026-03-28 09:37:54] [INFO]  [cb] CLOSED — circuito restablecido tras éxito
-[2026-03-28 09:37:54] [INFO]  [status] cb=CLOSED fallos=0 pendientes=1916
-```
-
-| Nivel | Stream | Cuándo |
-|-------|--------|--------|
-| `INFO` | stdout | Estado normal: ciclo, CB, FIFO drain |
-| `WARN` | stderr | Fallos recuperables: transitorio, OPEN, retry |
-| `ERROR` | stderr | Fallos irrecuperables: persistent fail, warmup timeout |
-
----
-
-## Instalación como servicio systemd
-
-```bash
-# Copiar unit file al dispositivo
-scp deploy/qw3100-modbus.service qw3100-device:/etc/systemd/system/
-
-# Activar
-ssh qw3100-device "systemctl daemon-reload && systemctl enable qw3100-modbus && systemctl start qw3100-modbus"
-
-# Ver logs
-ssh qw3100-device "journalctl -u qw3100-modbus -f"
-```
-
-Ver [deploy/qw3100-modbus.service](deploy/qw3100-modbus.service) para el unit file completo.
-
----
-
 ## Tests en el PC de desarrollo
 
 ```bash
-make devlinux
-./test/main_test
-# All 40 tests passed.
+make test
+# Resultados: 74 OK / 0 FAIL
 ```
 
 ---
@@ -239,17 +233,39 @@ make devlinux
 ## Mock server (pruebas sin API real)
 
 ```bash
-# Responde 200 OK
-python3 scripts/mock_server.py
-
-# Simula error de servidor (500)
-python3 scripts/mock_server.py --fail 500
-
-# Simula error de autenticación (401)
-python3 scripts/mock_server.py --fail 401
+python3 scripts/mock_server.py              # 200 OK
+python3 scripts/mock_server.py --fail 500   # 5xx (transitorio)
+python3 scripts/mock_server.py --fail 401   # 4xx (persistente)
+python3 scripts/mock_server.py --tls        # con TLS autofirmado
 ```
 
-Configurar `api.base_url` a `http://<IP_HOST>:9090` para apuntar al mock.
+Configurar `api.base_url` a `http://<IP_HOST>:9090` en el dispositivo.
+
+---
+
+## Broker MQTT local (pruebas)
+
+```bash
+sudo apt install mosquitto mosquitto-clients
+sudo tee /etc/mosquitto/conf.d/local-test.conf <<EOF
+listener 1883 0.0.0.0
+allow_anonymous true
+EOF
+sudo systemctl restart mosquitto
+
+# Suscribirse (usar comillas simples para el $)
+mosquitto_sub -h localhost -t '$aws/things/#' -v
+```
+
+---
+
+## Instalación como servicio systemd
+
+```bash
+scp deploy/qw3100-modbus.service qw3100-device:/etc/systemd/system/
+ssh qw3100-device "systemctl daemon-reload && systemctl enable qw3100-modbus && systemctl start qw3100-modbus"
+ssh qw3100-device "journalctl -u qw3100-modbus -f"
+```
 
 ---
 
@@ -257,25 +273,17 @@ Configurar `api.base_url` a `http://<IP_HOST>:9090` para apuntar al mock.
 
 ```
 QW3100_modbus/
-├── src/
-│   ├── main.c              — loop principal
-│   ├── sensor.c/h          — definición de sensores y snapshot
-│   ├── modbus_comm.c/h     — read_block_modbus(), modbus_wait_first_sweep()
-│   ├── config.c/h          — AppConfig, carga de JSON y CLI
-│   ├── persist.c/h         — FIFO de archivos en /SD/pending/
-│   ├── http_sender.c/h     — http_post() via libcurl
-│   ├── circuit_breaker.c/h — estados CLOSED/OPEN/HALF_OPEN
-│   └── logger.h            — LOG_INFO / LOG_WARN / LOG_ERROR
-├── lib/
-│   └── cJSON.c/h           — serialización JSON
-├── test/
-│   └── main_test.c         — 40 tests unitarios
-├── deploy/
-│   └── qw3100-modbus.service — unit systemd
+├── src/                  — código fuente del daemon
+├── lib/cJSON.c/h         — serialización JSON (vendored)
+├── test/main_test.c      — 74 tests unitarios
+├── third_party/arm/      — dependencias ARM precompiladas (.a)
+├── cross/armv7.ini       — cross-file Meson para arm-linux-gnueabihf
+├── deploy/               — unit file systemd
 ├── scripts/
-│   ├── mock_server.py      — servidor HTTP de prueba
-│   └── setup_dependencies_Sensor_Trident.sh
-├── docs/                   — documentación extendida
-├── Makefile
-└── qw3100-config.json      — ejemplo de configuración
+│   ├── build_third_party.sh  — compila deps ARM (ejecutar una vez)
+│   └── mock_server.py        — servidor HTTP de prueba
+├── docs/                 — documentación extendida
+├── meson.build           — build system
+├── Makefile              — wrapper de Meson
+└── qw3100-config.json    — ejemplo de configuración completo
 ```

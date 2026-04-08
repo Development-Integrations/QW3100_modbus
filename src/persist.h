@@ -36,4 +36,22 @@ char *persist_read_file(const char *dir_path, const char *filename);
  */
 int persist_delete(const char *dir_path, const char *filename);
 
+/*
+ * Mueve pending_dir/filename a sent_dir/filename usando rename().
+ * Crea sent_dir si no existe (un solo nivel).
+ * rename() es atómico si ambos directorios están en el mismo filesystem.
+ * Retorna 0 en éxito, -1 en error.
+ */
+int persist_move_to_sent(const char *pending_dir,
+                         const char *sent_dir,
+                         const char *filename);
+
+/*
+ * Elimina los archivos más antiguos de sent_dir si la cantidad total
+ * supera max_files. Usa orden FIFO (lexicográfico = cronológico por nombre ts).
+ * Solo elimina el exceso: si hay 1005 y max=1000, elimina los 5 más antiguos.
+ * Retorna número de archivos eliminados, -1 en error.
+ */
+int persist_rotate_sent(const char *sent_dir, int max_files);
+
 #endif /* PERSIST_H */

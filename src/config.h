@@ -3,18 +3,22 @@
 
 #include <stdint.h>
 #include "http_sender.h"
+#include "mqtt_sender.h"
 
 #define CONFIG_DEFAULT_INTERVAL_SEC       120
 #define CONFIG_DEFAULT_PATH               "/SD/qw3100-config.json"
 #define CONFIG_DEFAULT_SERIAL_PORT        "/dev/ttymxc2"
 #define CONFIG_DEFAULT_SLAVE_ID           1
 #define CONFIG_DEFAULT_PERSIST_PATH       "/SD/pending"
+#define CONFIG_DEFAULT_PERSIST_SENT_PATH  "/SD/sent"
+#define CONFIG_DEFAULT_PRIMARY_INTERFACE  "api"
 
 /* Defaults del módulo de envío y circuit breaker */
-#define CONFIG_DEFAULT_FIFO_MAX_PER_CYCLE 10   /* archivos por ciclo */
-#define CONFIG_DEFAULT_CB_FAIL_THRESHOLD  5    /* fallos para abrir circuito */
-#define CONFIG_DEFAULT_CB_OPEN_TIMEOUT    60   /* segundos antes de HALF_OPEN */
-#define CONFIG_DEFAULT_CB_BACKOFF_MAX     300  /* máximo backoff exponencial (5 min) */
+#define CONFIG_DEFAULT_FIFO_MAX_PER_CYCLE   10   /* archivos por ciclo */
+#define CONFIG_DEFAULT_CB_FAIL_THRESHOLD    5    /* fallos para abrir circuito */
+#define CONFIG_DEFAULT_CB_OPEN_TIMEOUT      60   /* segundos antes de HALF_OPEN */
+#define CONFIG_DEFAULT_CB_BACKOFF_MAX       300  /* máximo backoff exponencial (5 min) */
+#define CONFIG_DEFAULT_SENT_RETENTION_COUNT 1000 /* máximo archivos en sent/ */
 
 /* Resultado de carga de configuración desde archivo */
 typedef enum
@@ -28,10 +32,11 @@ typedef enum
 /* Parámetros de envío y circuit breaker — bloque "send" en el JSON de config */
 typedef struct
 {
-    uint8_t  fifo_max_per_cycle;  /* archivos pendientes a procesar por ciclo */
-    uint8_t  cb_fail_threshold;   /* fallos consecutivos para abrir el circuito */
-    uint32_t cb_open_timeout_sec; /* segundos de espera antes de pasar a HALF_OPEN */
-    uint32_t cb_backoff_max_sec;  /* límite máximo del backoff exponencial */
+    uint8_t  fifo_max_per_cycle;    /* archivos pendientes a procesar por ciclo */
+    uint8_t  cb_fail_threshold;     /* fallos consecutivos para abrir el circuito */
+    uint32_t cb_open_timeout_sec;   /* segundos de espera antes de pasar a HALF_OPEN */
+    uint32_t cb_backoff_max_sec;    /* límite máximo del backoff exponencial */
+    uint16_t sent_retention_count;  /* máximo de archivos en sent/ antes de rotar */
 } SendConfig;
 
 /*
@@ -44,9 +49,12 @@ typedef struct
     char       config_path[128];  /* Ruta del archivo de configuración */
     char       serial_port[64];   /* Puerto serial Modbus RTU (ej: /dev/ttymxc2) */
     uint8_t    slave_id;          /* Modbus slave ID del sensor (1..247) */
-    char       persist_path[128]; /* Directorio donde guardar JSON pendientes */
-    HttpConfig api;               /* Configuración HTTP POST a API Scante */
-    SendConfig send;              /* Parámetros de envío y circuit breaker */
+    char       persist_path[128];      /* Directorio donde guardar JSON pendientes */
+    char       persist_sent_path[128]; /* Directorio para JSONs ya enviados */
+    HttpConfig api;                    /* Configuración HTTP POST a API Scante */
+    MqttConfig mqtt;                   /* Configuración MQTT (AWS IoT) */
+    SendConfig send;                   /* Parámetros de envío y circuit breaker */
+    char       primary_interface[8];   /* Interfaz principal: "api" o "mqtt" */
 } AppConfig;
 
 /*

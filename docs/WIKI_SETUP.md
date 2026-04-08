@@ -4,129 +4,59 @@
 
 ```bash
 # Compilador cruzado ARM
-sudo apt install gcc-arm-linux-gnueabihf
+sudo apt install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
 
 # Herramientas de build
-sudo apt install make git curl
+sudo apt install meson ninja-build cmake git curl perl make
 ```
 
 ---
 
-## Compilar libmodbus para ARM
+## Compilar dependencias ARM (una sola vez)
+
+Las dependencias (OpenSSL, libmodbus, libcurl, libmosquitto) se compilan desde fuente
+y se instalan en `third_party/arm/`. Los archivos `.a` resultantes se commitean al repo,
+por lo que en proyectos ya clonados este paso solo es necesario si `third_party/arm/`
+no existe.
 
 ```bash
-git clone https://github.com/stephane/libmodbus.git
-cd libmodbus
+./scripts/build_third_party.sh
+```
 
-./autogen.sh
-./configure --host=arm-linux-gnueabihf --prefix=$HOME/opt/libmodbus-arm --enable-static --disable-shared
-make -j$(nproc)
-make install
+El script compila en orden:
+1. **OpenSSL** — base TLS para curl y mosquitto
+2. **libmodbus** — Modbus RTU, sin dependencias externas
+3. **libcurl** — con OpenSSL propio, sin zlib/nghttp2/brotli
+4. **libmosquitto** — con cJSON bundled, con OpenSSL propio
+
+Las fuentes se descargan a `_deps_build/` (gitignoreado). Los `.a` van a:
+
+```
+third_party/arm/
+├── openssl/    include/ + lib/libssl.a + lib/libcrypto.a
+├── modbus/     include/modbus/ + lib/libmodbus.a
+├── curl/       include/curl/  + lib/libcurl.a
+└── mosquitto/  include/mosquitto.h + lib/libmosquitto.a
 ```
 
 Verificar:
 ```bash
-ls $HOME/opt/libmodbus-arm/lib/libmodbus.a   # debe existir
+find third_party/arm -name "*.a"
+# → third_party/arm/openssl/lib/libssl.a
+# → third_party/arm/openssl/lib/libcrypto.a
+# → third_party/arm/modbus/lib/libmodbus.a
+# → third_party/arm/curl/lib/libcurl.a
+# → third_party/arm/mosquitto/lib/libmosquitto.a
 ```
 
 ---
 
-## Compilar libmodbus para el PC de desarrollo (devlinux)
+## Dependencias devlinux (tests en el PC de desarrollo)
+
+Para compilar y ejecutar tests en el PC de desarrollo se usan los paquetes del sistema:
 
 ```bash
-# En el mismo directorio de libmodbus clonado
-make distclean
-
-./configure --prefix=$HOME/opt/libmodbus-devlinux --enable-static --disable-shared
-make -j$(nproc)
-make install
-```
-
----
-
-## Compilar libcurl para ARM (sin SSL)
-
-```bash
-curl -LO https://curl.se/download/curl-8.7.1.tar.gz
-tar xzf curl-8.7.1.tar.gz
-cd curl-8.7.1
-
-./configure \
-  --host=arm-linux-gnueabihf \
-  --prefix=$HOME/opt/libcurl-arm \
-  --enable-static \
-  --disable-shared \
-  --without-ssl \
-  --disable-ldap \
-  --disable-ldaps \
-  --without-libpsl \
-  --without-brotli \
-  --without-zstd
-
-make -j$(nproc)
-make install
-```
-
-Verificar:
-```bash
-ls $HOME/opt/libcurl-arm/lib/libcurl.a   # debe existir
-```
-
-> **Nota:** Se compila sin SSL porque el endpoint Scante usa HTTPS en un proxy externo. El binario ARM se conecta al proxy interno por HTTP.
-
----
-
-## Variables de entorno
-
-Estas son las variables que usa el Makefile (sobreescribibles vía entorno o `make VAR=valor`):
-
-```bash
-# ARM (cross-compile)
-PREFIX_MODBUS_ARM=$HOME/opt/libmodbus-arm
-PREFIX_CURL_ARM=$HOME/opt/libcurl-arm
-
-# devlinux (tests en el PC de desarrollo)
-PREFIX_MODBUS_DEVLINUX=$HOME/opt/libmodbus-devlinux
-PREFIX_CURL_DEVLINUX=$HOME/opt/libcurl-devlinux
-```
-
----
-
-## Forma recomendada: script de setup
-
-El script `scripts/setup_dependencies_Sensor_Trident.sh` automatiza todo lo anterior (libmodbus + libcurl) para ambos targets:
-
-```bash
-./scripts/setup_dependencies_Sensor_Trident.sh arm       # para cross-compile ARM
-./scripts/setup_dependencies_Sensor_Trident.sh devlinux  # para tests en el PC de desarrollo
-```
-
-El script detecta si las librerías ya están compiladas y las omite, y valida que libcurl no tenga dependencias externas (nghttp2, zlib, etc.) que causarían errores al linkear estáticamente.
-
----
-
-## Compilar libcurl para el PC de desarrollo (devlinux)
-
-La compilación devlinux también requiere libcurl estática propia (sin nghttp2/zlib/brotli), ya que `-lcurl` del sistema puede causar errores "undefined reference" al linkear en modo estático.
-
-```bash
-# Usar el script es lo más simple:
-./scripts/setup_dependencies_Sensor_Trident.sh devlinux
-
-# O manualmente, desde el directorio de fuentes de curl:
-./configure \
-  --prefix=$HOME/opt/libcurl-devlinux \
-  --enable-static \
-  --disable-shared \
-  --without-ssl \
-  --without-libpsl \
-  --without-zstd \
-  --without-brotli \
-  --without-zlib \
-  --without-libidn2 \
-  --without-nghttp2
-
-make -j$(nproc) && make install
+sudo apt install libmodbus-dev libcurl4-openssl-dev libmosquitto-dev libssl-dev
 ```
 
 ---
@@ -156,12 +86,14 @@ ssh-copy-id -p 2122 root@<IP_DEL_DISPOSITIVO>
 # Compilador ARM disponible
 arm-linux-gnueabihf-gcc --version
 
-# Librerías presentes
-ls $HOME/opt/libmodbus-arm/lib/libmodbus.a
-ls $HOME/opt/libcurl-arm/lib/libcurl.a
-ls $HOME/opt/libmodbus-devlinux/lib/libmodbus.a
+# Dependencias ARM presentes
+find third_party/arm -name "*.a" | sort
 
-# Compilar y testear
-make devlinux && ./test/main_test
+# Compilar tests y verificar
+make test
+
+# Compilar ARM
 make arm
+file sensor_trident_modbus_ARM   # → ELF 32-bit LSB executable, ARM
+ldd sensor_trident_modbus_ARM    # → not a dynamic executable
 ```

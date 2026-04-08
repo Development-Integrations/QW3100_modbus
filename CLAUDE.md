@@ -7,10 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **QW3100 Modbus** es un daemon para Linux embebido ARM escrito en C que:
 - Lee datos de sensores QW3100 vía Modbus RTU
 - Persiste lecturas localmente como archivos JSON en una cola FIFO
-- Envía datos a una API de Scante simulando un gateway Poseidon AP2200
+- Envía datos a una API Scante (HTTP) o AWS IoT Core (MQTT) con failover automático
 - Implementa circuit breaker + backoff exponencial para resiliencia de red
 
-El dispositivo destino es una placa ARM con Linux embebido. El desarrollo y las pruebas se hacen en Linux ya sea x86 o Raspberry PI 4 B.
+El dispositivo destino es una placa ARM con Linux embebido. El desarrollo y las pruebas se hacen en Linux x86 o Raspberry Pi 4B.
 
 ## Comandos
 
@@ -18,12 +18,11 @@ El dispositivo destino es una placa ARM con Linux embebido. El desarrollo y las 
 ```bash
 make          # o: make arm
 ```
-Produce `sensor_trident_modbus_ARM` (ELF estático para ARM).
+Produce `sensor_trident_modbus_ARM` (ELF estático para ARM). Requiere `third_party/arm/` con las dependencias precompiladas.
 
 ### Compilar y correr pruebas en el PC de desarrollo
 ```bash
-make devlinux       # compila test/main_test en el Linux local
-./test/main_test    # ejecuta ~40 pruebas unitarias
+make test     # compila y ejecuta tests (usa paquetes del sistema)
 ```
 
 ### Desplegar al dispositivo
@@ -32,12 +31,18 @@ make deploy   # SCP a qw3100-device:/SD/ (requiere alias SSH en ~/.ssh/config)
 make run      # deploy + ejecuta vía SSH
 ```
 
-### Servidor mock para pruebas de integración
+### Servidor mock HTTP para pruebas
 ```bash
 python3 scripts/mock_server.py              # 200 OK
 python3 scripts/mock_server.py --fail 500   # 5xx (transitorio)
 python3 scripts/mock_server.py --fail 401   # 4xx (persistente)
-python3 scripts/mock_server.py --fail timeout
+python3 scripts/mock_server.py --tls        # con TLS autofirmado
+```
+
+### Broker MQTT local para pruebas
+```bash
+# Suscribirse (# no captura topics que empiezan con $)
+mosquitto_sub -h localhost -t '$aws/things/#' -v
 ```
 
 ### Limpiar
@@ -55,9 +60,10 @@ make clean
 | Sensor | `src/sensor.c/h` | Definiciones de registros, construcción de snapshots, serialización JSON |
 | Modbus | `src/modbus_comm.c/h` | Lectura RTU con lógica de reconexión y backoff |
 | Config | `src/config.c/h` | Carga JSON de configuración + overrides por CLI |
-| Persistencia | `src/persist.c/h` | Cola FIFO de archivos en `/SD/pending/` |
-| HTTP | `src/http_sender.c/h` | POST único vía libcurl, retorna `HttpResult` |
-| Circuit Breaker | `src/circuit_breaker.c/h` | Máquina de estados CLOSED/OPEN/HALF_OPEN |
+| Persistencia | `src/persist.c/h` | Cola FIFO en `/SD/pending/`, directorio `sent/` con rotación |
+| HTTP | `src/http_sender.c/h` | POST único vía libcurl con TLS opcional, retorna `HttpResult` |
+| MQTT | `src/mqtt_sender.c/h` | Publica AWS Device Shadow vía libmosquitto con TLS/mTLS |
+| Circuit Breaker | `src/circuit_breaker.c/h` | Máquina de estados CLOSED/OPEN/HALF_OPEN (una instancia por interfaz) |
 | Logger | `src/logger.h` | Macros con timestamp — INFO→stdout, WARN/ERROR→stderr |
 | cJSON | `lib/cJSON.c/h` | Biblioteca JSON incluida en el repo |
 
@@ -78,16 +84,34 @@ while(1):
   sleep(interval_sec)
 ```
 
+### Selección de interfaz y failover
+
+`select_interface()` en `main.c` determina qué interfaz usar:
+- Si `primary=api` y `cb_api` no está OPEN → usa API
+- Si `primary=api` y `cb_api` está OPEN y MQTT está habilitado → failover a MQTT
+- Si `primary=mqtt` y `cb_mqtt` está OPEN y API está habilitada → failover a API
+- Hay dos instancias de `CircuitBreaker` independientes: `cb_api` y `cb_mqtt`
+
 ### Circuit breaker
 
 Tres estados con transiciones:
 - **CLOSED**: operación normal, envía hasta `fifo_max_per_cycle` (default 10) archivos por ciclo
-- **OPEN**: envíos bloqueados; pasa a HALF_OPEN tras expirar `current_timeout`
+- **OPEN**: envíos bloqueados; pasa a HALF_OPEN al expirar `current_timeout`
 - **HALF_OPEN**: envía un archivo como sonda; éxito → CLOSED, fallo → OPEN (backoff se duplica)
 
-Backoff: 60s → 120s → 240s → 300s (tope en `cb_backoff_max_sec`).
+`HTTP_ERR_TRANSIENT`/`MQTT_ERR_CONNECT` (timeout, 5xx) incrementan contador; errores persistentes (4xx, `MQTT_ERR_BUILD`) abren el circuito inmediatamente.
 
-`HTTP_ERR_TRANSIENT` (timeout, 5xx) incrementa contador de fallos; `HTTP_ERR_PERSISTENT` (4xx) abre el circuito inmediatamente.
+### MQTT — formato del payload
+
+`mqtt_sender.c` envía al topic `$aws/things/<thing_name>/shadow/update` con formato AWS Device Shadow:
+```json
+{
+  "state": { "reported": <payload_canónico_gateway> },
+  "clientToken": "<thing_name>-<timestamp>",
+  "version": 1
+}
+```
+Si `ca_path` está vacío conecta sin TLS (modo prueba). Con `ca_path` configurado activa TLS; `cert_path`/`key_path` son opcionales (mTLS).
 
 ### Lógica de reconexión Modbus
 
@@ -105,40 +129,49 @@ Las claves de configuración viven en el struct `AppConfig` (`src/config.h`). El
 
 ## Entorno de compilación
 
-El Makefile usa estas rutas (se pueden sobreescribir con variables de entorno):
+### Build system
+
+El proyecto usa **Meson** con un Makefile como wrapper. El cross-file está en `cross/armv7.ini`.
+
+```bash
+apt install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf meson ninja-build
 ```
-PREFIX_MODBUS_ARM      → $HOME/opt/libmodbus-arm      (ARM libmodbus, cross-compile)
-PREFIX_CURL_ARM        → $HOME/opt/libcurl-arm        (ARM libcurl, sin SSL, cross-compile)
-PREFIX_MODBUS_DEVLINUX → $HOME/opt/libmodbus-devlinux (libmodbus para tests en el PC de desarrollo)
-PREFIX_CURL_DEVLINUX   → $HOME/opt/libcurl-devlinux   (libcurl para tests en el PC de desarrollo)
+
+### Dependencias ARM
+
+Las dependencias ARM se compilan desde fuente una sola vez (no se versionan — `third_party/` está en `.gitignore`):
+
+```bash
+./scripts/build_third_party.sh   # OpenSSL → libmodbus → libcurl → libmosquitto
+```
+
+Resultado en `third_party/arm/{openssl,modbus,curl,mosquitto}/`.
+
+### Dependencias devlinux
+
+Para tests en el PC de desarrollo se usan paquetes del sistema:
+```bash
+apt install libmodbus-dev libcurl4-openssl-dev libmosquitto-dev libssl-dev
 ```
 
 Ambas compilaciones (ARM y devlinux) son completamente estáticas (sin dependencias `.so` en runtime).
 
-### Setup de dependencias
-
-Usar el script incluido (maneja arm y devlinux, incluyendo libcurl estática sin dependencias externas):
-```bash
-./scripts/setup_dependencies_Sensor_Trident.sh arm       # libmodbus + libcurl para ARM
-./scripts/setup_dependencies_Sensor_Trident.sh devlinux  # libmodbus + libcurl para el PC de desarrollo
-```
-
 ## Pruebas
 
-Las pruebas en `test/main_test.c` usan un harness propio simple (sin framework externo). Para agregar pruebas, seguir el patrón existente `=== TEST: Nombre ===` / `[OK]` / `[FAIL]`. Cubren: parseo de sensores, carga de config, FIFO de persistencia, transiciones del circuit breaker, clasificación de errores HTTP y cálculo de backoff.
+Las pruebas en `test/main_test.c` usan un harness propio simple (sin framework externo). Para agregar pruebas, seguir el patrón existente `=== TEST: Nombre ===` / `[OK]` / `[FAIL]`. Cubren: parseo de sensores, carga de config, FIFO de persistencia, directorio sent/, transiciones del circuit breaker, clasificación de errores HTTP, configuración y early-returns de MQTT.
 
-`test/main_test_JSON.c` es un archivo de exploración/scratch — **no forma parte de `make devlinux`** y no tiene aserciones. No confiar en él.
+`test/main_test_JSON.c` es un archivo de exploración/scratch — **no forma parte de `make test`** y no tiene aserciones.
 
-Nota: `src/circuit_breaker.c` está excluido intencionalmente de `SRCS_TEST`; el circuit breaker se ejercita indirectamente a través de stubs de `http_sender`.
+Nota: `src/circuit_breaker.c` está excluido intencionalmente de los sources de test; el circuit breaker se ejercita indirectamente a través de stubs de `http_sender`.
 
 ## Documentación de referencia
 
 `docs/` contiene wikis detalladas en español:
-- `WIKI_HOME.md` — índice general de la documentación
+- `WIKI_HOME.md` — índice general y estado del proyecto
 - `WIKI_ARQUITECTURA.md` — decisiones de diseño y arquitectura en profundidad
-- `WIKI_COMPILACION.md` — setup de cross-compilación
+- `WIKI_COMPILACION.md` — comandos de compilación con Meson/Makefile
 - `WIKI_DEPLOYMENT.md` — operación y despliegue en el dispositivo
-- `WIKI_TESTING.md` — estrategia de testing y cómo agregar pruebas
+- `WIKI_TESTING.md` — tests unitarios, mock server HTTP y MQTT, escenarios de validación
 - `WIKI_FLUJO_DESARROLLO.md` — flujo de desarrollo y checklist de deploy
-- `WIKI_SETUP.md` — configuración del entorno desde cero
-- `Requisitos.md` — requisitos funcionales del sistema
+- `WIKI_SETUP.md` — configuración del entorno desde cero (deps ARM y devlinux)
+- `Requisitos.md` — requisitos de Fase 2 (todos implementados)

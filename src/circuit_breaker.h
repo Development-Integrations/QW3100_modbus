@@ -32,6 +32,13 @@ int cb_allow_send(CircuitBreaker *cb);
 void cb_on_success(CircuitBreaker *cb);
 
 /*
+ * Evalúa si el timeout de un CB en OPEN ha expirado y lo transiciona a
+ * HALF_OPEN. Usar para "tickear" el CB primario cuando se está enviando
+ * por el CB de failover, sin logs ruidosos de "envío pausado".
+ */
+void cb_maybe_recover(CircuitBreaker *cb);
+
+/*
  * Llamar tras error transitorio (timeout, 5xx, sin conexión).
  * Incrementa fail_count. Abre el circuito si alcanza fail_threshold.
  * fail_threshold   : número de fallos consecutivos para abrir el circuito

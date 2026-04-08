@@ -2,7 +2,12 @@
     "interval_sec": 120,
     "serial_port": "/dev/ttymxc2",
     "slave_id": 1,
-    "persist_path": "/SD/pending",
+    "persist_path":      "/SD/pending",
+    "persist_sent_path": "/SD/sent",
+
+    "web_interface": {
+        "primary": "api"
+    },
 
     "api": {
         "enabled": true,
@@ -11,13 +16,27 @@
         "pull_type_guid": "<pull_type_guid>",
         "scante_token": "<scante_token>",
         "scante_appid": "<scante_appid>",
-        "scante_sgid": "<scante_sgid>"
+        "scante_sgid": "<scante_sgid>",
+        "ca_bundle_path": ""
+    },
+
+    "mqtt": {
+        "enabled":             false,
+        "broker_url":          "a2g1ow8hkm0df8-ats.iot.us-east-1.amazonaws.com",
+        "port":                8883,
+        "thing_name":          "<thing_name>",
+        "cert_path":           "/SD/certs/device.crt",
+        "key_path":            "/SD/certs/device.key",
+        "ca_path":             "/SD/certs/root-CA.crt",
+        "connect_timeout_sec": 10,
+        "keepalive_sec":       60
     },
 
     "send": {
-        "fifo_max_per_cycle": 10,
-        "cb_fail_threshold": 5,
-        "cb_open_timeout_sec": 60,
-        "cb_backoff_max_sec": 300
+        "fifo_max_per_cycle":    10,
+        "sent_retention_count":  1000,
+        "cb_fail_threshold":     5,
+        "cb_open_timeout_sec":   60,
+        "cb_backoff_max_sec":    300
     }
 }

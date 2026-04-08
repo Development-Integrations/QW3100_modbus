@@ -57,6 +57,16 @@ HttpResult http_post(const HttpConfig *cfg, const char *json_payload)
     curl_easy_setopt(curl, CURLOPT_TIMEOUT,         30L);   /* 30 s total */
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT,  10L);   /* 10 s conexión */
 
+    /* TLS — solo si la URL usa HTTPS; HTTP plano no cambia */
+    if (strncmp(url, "https://", 8) == 0)
+    {
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+        if (cfg->ca_bundle_path[0] != '\0')
+            curl_easy_setopt(curl, CURLOPT_CAINFO, cfg->ca_bundle_path);
+        /* Si ca_bundle_path está vacío, libcurl usa el CA bundle del sistema */
+    }
+
     CURLcode res = curl_easy_perform(curl);
 
     HttpResult result;

@@ -32,6 +32,15 @@ int cb_allow_send(CircuitBreaker *cb)
     return 1;
 }
 
+void cb_maybe_recover(CircuitBreaker *cb)
+{
+    if (cb->state == CB_OPEN && time(NULL) >= cb->next_retry)
+    {
+        cb->state = CB_HALF_OPEN;
+        LOG_INFO("[cb] HALF_OPEN — probando conexión (recuperación desde failover)");
+    }
+}
+
 void cb_on_success(CircuitBreaker *cb)
 {
     if (cb->state != CB_CLOSED)

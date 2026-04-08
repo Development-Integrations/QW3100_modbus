@@ -141,3 +141,72 @@ int persist_delete(const char *dir_path, const char *filename)
     }
     return 0;
 }
+
+int persist_move_to_sent(const char *pending_dir,
+                         const char *sent_dir,
+                         const char *filename)
+{
+    if (mkdir(sent_dir, 0755) == -1 && errno != EEXIST)
+    {
+        fprintf(stderr, "[persist] No se pudo crear directorio '%s': %s\n",
+                sent_dir, strerror(errno));
+        return -1;
+    }
+
+    char src[256], dst[256];
+    int n;
+
+    n = snprintf(src, sizeof(src), "%s/%s", pending_dir, filename);
+    if (n < 0 || (size_t)n >= sizeof(src))
+        return -1;
+
+    n = snprintf(dst, sizeof(dst), "%s/%s", sent_dir, filename);
+    if (n < 0 || (size_t)n >= sizeof(dst))
+        return -1;
+
+    if (rename(src, dst) != 0)
+    {
+        fprintf(stderr, "[persist] No se pudo mover '%s' → '%s': %s\n",
+                src, dst, strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+int persist_rotate_sent(const char *sent_dir, int max_files)
+{
+    int total = persist_list_pending(sent_dir, NULL, 0);
+    if (total < 0)
+        return -1;
+    if (total <= max_files)
+        return 0;
+
+    int excess = total - max_files;
+
+    PendingFileName *files = malloc((size_t)total * sizeof(PendingFileName));
+    if (files == NULL)
+    {
+        fprintf(stderr, "[persist] Sin memoria para rotar '%s'\n", sent_dir);
+        return -1;
+    }
+
+    int listed = persist_list_pending(sent_dir, files, total);
+    if (listed < 0)
+    {
+        free(files);
+        return -1;
+    }
+
+    int deleted = 0;
+    for (int i = 0; i < excess && i < listed; i++)
+    {
+        if (persist_delete(sent_dir, files[i]) == 0)
+            deleted++;
+        else
+            fprintf(stderr, "[persist] Rotación: no se pudo eliminar '%s/%s'\n",
+                    sent_dir, files[i]);
+    }
+
+    free(files);
+    return deleted;
+}
