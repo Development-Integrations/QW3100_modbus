@@ -5,11 +5,12 @@
 ```
 src/
 ├── main.c              — loop principal de captura
-├── config.c/h          — carga de configuración (JSON + CLI)
+├── config.c/h          — carga de configuración (JSON + CLI); define GatewayConfig y GATEWAY_FW_VERSION
 ├── modbus_comm.c/h     — comunicación Modbus RTU
-├── sensor.c/h          — definición de registros y snapshot
+├── sensor.c/h          — definición de registros, snapshot y serialización JSON (GatewayInfo)
 ├── persist.c/h         — persistencia FIFO en /SD/pending/
-├── http_sender.c/h     — envío HTTP POST a API Scante
+├── http_sender.c/h     — POST Bearer token a fleet.nebulae.com.co
+├── mqtt_sender.c/h     — publica AWS Device Shadow vía libmosquitto
 ├── circuit_breaker.c/h — control de reintentos (CB pattern)
 └── logger.h            — macros de logging con timestamp
 ```
@@ -108,6 +109,8 @@ Si agota → retorna -1 → `continue` en el ciclo. El daemon nunca cierra por d
 |----------|----------------------|-------|
 | Loop `while(1)` single-thread | POSIX threads | Sin concurrencia necesaria en ciclo de 120s |
 | Archivos JSON como persistencia | SQLite / LevelDB | Simplicidad en embebido minimal |
-| libcurl estática sin SSL | Con SSL | El endpoint final usa HTTPS en proxy externo |
+| libcurl estática + OpenSSL | Sin SSL | El endpoint de producción usa HTTPS con LE R13; SSL integrado en binario estático |
+| Bearer token en config | Credenciales compiladas | Permite rotar token sin recompilar |
+| `sn` del gateway como string en JSON | Número entero | La API fleet espera string; evita problemas de precisión con uint32 |
 | `exit(1)` solo en warmup timeout | Loop infinito | systemd reinicia limpiamente |
 | Circuit breaker en cliente | Lógica en servidor | Canal celular — proteger la red |

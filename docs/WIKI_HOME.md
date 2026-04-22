@@ -8,10 +8,12 @@ Daemon C embebido para Linux ARM. Lee el sensor QW3100 vía Modbus RTU, persiste
 |-----------|-----------|
 | [Arquitectura](WIKI_ARQUITECTURA.md) | Módulos, flujo de datos, máquinas de estado, decisiones de diseño |
 | [Setup del entorno](WIKI_SETUP.md) | Compilar dependencias ARM, paquetes devlinux, alias SSH |
+| [Dependencias](WIKI_DEPENDENCIAS.md) | Versiones, flags críticos y razón de cada dependencia ARM |
 | [Compilación](WIKI_COMPILACION.md) | Makefile/Meson, verificación del binario |
 | [Deployment](WIKI_DEPLOYMENT.md) | Deploy al dispositivo, systemd, operación en producción |
 | [Testing](WIKI_TESTING.md) | Tests unitarios, mock server MQTT/HTTP, escenarios de validación |
 | [Flujo de desarrollo](WIKI_FLUJO_DESARROLLO.md) | Ciclo de trabajo, convenciones de commit, troubleshooting |
+| [Herramientas](WIKI_TOOLS.md) | `probe_env`: validación de librerías estáticas ARM (DNS, TLS, conectividad) |
 
 ## Inicio rápido
 

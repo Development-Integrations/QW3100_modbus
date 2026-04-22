@@ -61,15 +61,17 @@ void config_init(AppConfig *cfg)
     strncpy(cfg->persist_sent_path, CONFIG_DEFAULT_PERSIST_SENT_PATH, sizeof(cfg->persist_sent_path) - 1);
     cfg->persist_sent_path[sizeof(cfg->persist_sent_path) - 1] = '\0';
 
+    /* Gateway defaults */
+    strncpy(cfg->gateway.name, "FLO-W9", sizeof(cfg->gateway.name) - 1);
+    cfg->gateway.name[sizeof(cfg->gateway.name) - 1] = '\0';
+    strncpy(cfg->gateway.sn, "0000", sizeof(cfg->gateway.sn) - 1);
+    cfg->gateway.sn[sizeof(cfg->gateway.sn) - 1] = '\0';
+
     /* API defaults: deshabilitada, campos vacíos */
-    cfg->api.enabled = 0;
-    cfg->api.base_url[0]        = '\0';
-    cfg->api.item_guid[0]       = '\0';
-    cfg->api.pull_type_guid[0]  = '\0';
-    cfg->api.scante_token[0]    = '\0';
-    cfg->api.scante_appid[0]    = '\0';
-    cfg->api.scante_sgid[0]     = '\0';
-    cfg->api.ca_bundle_path[0]  = '\0'; /* vacío = usar CA bundle del sistema */
+    cfg->api.enabled       = 0;
+    cfg->api.base_url[0]   = '\0';
+    cfg->api.bearer_token[0] = '\0';
+    cfg->api.ca_bundle_path[0] = '\0'; /* vacío = usar CA bundle del sistema */
 
     /* MQTT defaults: deshabilitado, campos vacíos */
     cfg->mqtt.enabled              = 0;
@@ -223,13 +225,27 @@ ConfigFileResult config_load_file(AppConfig *cfg)
     } while (0)
 
         PARSE_STR("base_url",       base_url);
-        PARSE_STR("item_guid",      item_guid);
-        PARSE_STR("pull_type_guid", pull_type_guid);
-        PARSE_STR("scante_token",   scante_token);
-        PARSE_STR("scante_appid",   scante_appid);
-        PARSE_STR("scante_sgid",    scante_sgid);
+        PARSE_STR("bearer_token",   bearer_token);
         PARSE_STR("ca_bundle_path", ca_bundle_path);
 #undef PARSE_STR
+    }
+
+    /* Leer objeto "gateway" si existe */
+    cJSON *gateway = cJSON_GetObjectItemCaseSensitive(root, "gateway");
+    if (gateway != NULL)
+    {
+#define PARSE_GW_STR(key, field) \
+    do { \
+        cJSON *_it = cJSON_GetObjectItemCaseSensitive(gateway, key); \
+        if (cJSON_IsString(_it) && _it->valuestring) { \
+            strncpy(cfg->gateway.field, _it->valuestring, sizeof(cfg->gateway.field) - 1); \
+            cfg->gateway.field[sizeof(cfg->gateway.field) - 1] = '\0'; \
+        } \
+    } while (0)
+
+        PARSE_GW_STR("name", name);
+        PARSE_GW_STR("sn",   sn);
+#undef PARSE_GW_STR
     }
 
     /* Leer "web_interface.primary" si existe */
@@ -398,10 +414,14 @@ void config_print(const AppConfig *cfg)
     printf("[config] persist_path : %s\n",   cfg->persist_path);
     printf("[config] persist_sent : %s\n",   cfg->persist_sent_path);
     printf("[config] sent_retain  : %u archivos\n", cfg->send.sent_retention_count);
+    printf("[config] gateway.name : %s\n",   cfg->gateway.name);
+    printf("[config] gateway.sn   : %s\n",   cfg->gateway.sn);
     printf("[config] api.enabled  : %s\n",   cfg->api.enabled ? "true" : "false");
     if (cfg->api.enabled)
     {
         printf("[config] api.base_url : %s\n", cfg->api.base_url);
+        printf("[config] api.token    : %s\n",
+               cfg->api.bearer_token[0] ? "(present)" : "(empty)");
         printf("[config] api.ca_bundle: %s\n",
                cfg->api.ca_bundle_path[0] ? cfg->api.ca_bundle_path : "(sistema)");
     }

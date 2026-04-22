@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **QW3100 Modbus** es un daemon para Linux embebido ARM escrito en C que:
 - Lee datos de sensores QW3100 vía Modbus RTU
 - Persiste lecturas localmente como archivos JSON en una cola FIFO
-- Envía datos a una API Scante (HTTP) o AWS IoT Core (MQTT) con failover automático
+- Envía datos a la API REST de fleet.nebulae.com.co (HTTP Bearer token) o AWS IoT Core (MQTT) con failover automático
 - Implementa circuit breaker + backoff exponencial para resiliencia de red
 
 El dispositivo destino es una placa ARM con Linux embebido. El desarrollo y las pruebas se hacen en Linux x86 o Raspberry Pi 4B.
@@ -22,14 +22,25 @@ Produce `sensor_trident_modbus_ARM` (ELF estático para ARM). Requiere `third_pa
 
 ### Compilar y correr pruebas en el PC de desarrollo
 ```bash
-make test     # compila y ejecuta tests (usa paquetes del sistema)
+make test       # compila y ejecuta tests (usa paquetes del sistema)
+make devlinux   # solo compila sin ejecutar
 ```
+
+No hay forma de correr un test individual: todos los tests viven en un único binario (`test/main_test.c`) y se ejecutan juntos. Para aislar un fallo, buscar el prefijo `=== TEST: Nombre ===` en la salida.
 
 ### Desplegar al dispositivo
 ```bash
-make deploy   # SCP a qw3100-device:/SD/ (requiere alias SSH en ~/.ssh/config)
+make deploy   # SCP a FLO-W9-YYYY:/SD/ (requiere alias SSH en ~/.ssh/config)
 make run      # deploy + ejecuta vía SSH
 ```
+
+### Herramienta de diagnóstico TLS/curl (`probe_env`)
+```bash
+make probe          # compila para devlinux y ejecuta POST real al endpoint
+make probe-arm      # cross-compila para ARM
+make probe-deploy   # probe-arm + scp al dispositivo
+```
+Valida las librerías estáticas ARM: DNS (c-ares), TLS (OpenSSL), CA bundle y conectividad HTTP. Si sale `HTTP 200 — OK`, las `.a` compiladas son correctas. Credenciales y URL hardcodeadas en `tools/probe_env_config.h`.
 
 ### Servidor mock HTTP para pruebas
 ```bash
@@ -59,9 +70,9 @@ make clean
 | Bucle principal | `src/main.c` | Orquesta todos los módulos en un ciclo `while(1)` |
 | Sensor | `src/sensor.c/h` | Definiciones de registros, construcción de snapshots, serialización JSON |
 | Modbus | `src/modbus_comm.c/h` | Lectura RTU con lógica de reconexión y backoff |
-| Config | `src/config.c/h` | Carga JSON de configuración + overrides por CLI |
+| Config | `src/config.c/h` | Carga JSON de configuración + overrides por CLI. Define `GatewayConfig` (name/sn) y `GATEWAY_FW_VERSION` |
 | Persistencia | `src/persist.c/h` | Cola FIFO en `/SD/pending/`, directorio `sent/` con rotación |
-| HTTP | `src/http_sender.c/h` | POST único vía libcurl con TLS opcional, retorna `HttpResult` |
+| HTTP | `src/http_sender.c/h` | POST a `base_url` con `Authorization: Bearer <bearer_token>`, retorna `HttpResult`. `http_global_init()` **debe llamarse una vez antes del loop** (inicializa OpenSSL estático) |
 | MQTT | `src/mqtt_sender.c/h` | Publica AWS Device Shadow vía libmosquitto con TLS/mTLS |
 | Circuit Breaker | `src/circuit_breaker.c/h` | Máquina de estados CLOSED/OPEN/HALF_OPEN (una instancia por interfaz) |
 | Logger | `src/logger.h` | Macros con timestamp — INFO→stdout, WARN/ERROR→stderr |
@@ -101,6 +112,8 @@ Tres estados con transiciones:
 
 `HTTP_ERR_TRANSIENT`/`MQTT_ERR_CONNECT` (timeout, 5xx) incrementan contador; errores persistentes (4xx, `MQTT_ERR_BUILD`) abren el circuito inmediatamente.
 
+`cb_maybe_recover(cb)` — tíquea silenciosamente el CB primario cada ciclo mientras se envía por el failover. Permite la transición OPEN→HALF_OPEN sin llamar a `cb_allow_send()` (que generaría logs ruidosos de "envío pausado").
+
 ### MQTT — formato del payload
 
 `mqtt_sender.c` envía al topic `$aws/things/<thing_name>/shadow/update` con formato AWS Device Shadow:
@@ -127,6 +140,12 @@ Precedencia: defaults compilados → `/SD/qw3100-config.json` → flags CLI `--i
 
 Las claves de configuración viven en el struct `AppConfig` (`src/config.h`). El archivo JSON es opcional; todos los campos tienen defaults. Ver `qw3100-config.json` en la raíz del repo como referencia de estructura.
 
+Bloques JSON del archivo de configuración:
+- `gateway`: `name` (string) y `sn` (serial 4 dígitos como string). Defaults: `"FLO-W9"` / `"0000"`. La versión de firmware no va en config — se define con `GATEWAY_FW_VERSION` en `src/config.h`.
+- `api`: `enabled`, `base_url` (URL completa del endpoint), `bearer_token` (JWT), `ca_bundle_path`.
+- `mqtt`: configuración AWS IoT Core (broker, certs, thing_name).
+- `send`: parámetros de circuit breaker y FIFO.
+
 ## Entorno de compilación
 
 ### Build system
@@ -142,10 +161,12 @@ apt install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf meson ninja-build
 Las dependencias ARM se compilan desde fuente una sola vez (no se versionan — `third_party/` está en `.gitignore`):
 
 ```bash
-./scripts/build_third_party.sh   # OpenSSL → libmodbus → libcurl → libmosquitto
+./scripts/build_third_party.sh   # OpenSSL → c-ares → libmodbus → libcurl → libmosquitto
 ```
 
-Resultado en `third_party/arm/{openssl,modbus,curl,mosquitto}/`.
+Resultado en `third_party/arm/{openssl,cares,modbus,curl,mosquitto}/`.
+
+Flags críticos de OpenSSL: `no-shared no-engine no-dso` — sin `no-dso` el binario estático crashea en ARM al intentar hacer `dlopen` de providers en runtime. libcurl se compila con `--enable-ares` (c-ares) para DNS sin glibc NSS, que también crashea en binarios estáticos ARM.
 
 ### Dependencias devlinux
 
@@ -155,6 +176,18 @@ apt install libmodbus-dev libcurl4-openssl-dev libmosquitto-dev libssl-dev
 ```
 
 Ambas compilaciones (ARM y devlinux) son completamente estáticas (sin dependencias `.so` en runtime).
+
+### CA bundle en el dispositivo
+
+El `/etc/ssl/certs/ca-certificates.crt` del dispositivo está desactualizado (no incluye Let's Encrypt R13). El bundle correcto está en:
+```
+/usr/local/share/ca-certificates/roots.pem       # bundle completo
+/usr/local/share/ca-certificates/isrgrootx1.pem  # ISRG Root X1 — cadena LE R13
+```
+El campo `ca_bundle_path` en `qw3100-config.json` debe apuntar a una de estas rutas. Para el daemon en producción:
+```json
+"ca_bundle_path": "/usr/local/share/ca-certificates/isrgrootx1.pem"
+```
 
 ## Pruebas
 

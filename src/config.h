@@ -5,6 +5,8 @@
 #include "http_sender.h"
 #include "mqtt_sender.h"
 
+#define GATEWAY_FW_VERSION                "0.1.0"
+
 #define CONFIG_DEFAULT_INTERVAL_SEC       120
 #define CONFIG_DEFAULT_PATH               "/SD/qw3100-config.json"
 #define CONFIG_DEFAULT_SERIAL_PORT        "/dev/ttymxc2"
@@ -29,6 +31,13 @@ typedef enum
     CONFIG_FILE_INVALID_VALUE /* Valor fuera de rango */
 } ConfigFileResult;
 
+/* Identidad del gateway — bloque "gateway" en el JSON de config */
+typedef struct
+{
+    char name[32];   /* Nombre del gateway, ej: "FLO-W9" */
+    char sn[8];      /* Serial de 4 dígitos como string, ej: "0000" */
+} GatewayConfig;
+
 /* Parámetros de envío y circuit breaker — bloque "send" en el JSON de config */
 typedef struct
 {
@@ -51,7 +60,8 @@ typedef struct
     uint8_t    slave_id;          /* Modbus slave ID del sensor (1..247) */
     char       persist_path[128];      /* Directorio donde guardar JSON pendientes */
     char       persist_sent_path[128]; /* Directorio para JSONs ya enviados */
-    HttpConfig api;                    /* Configuración HTTP POST a API Scante */
+    GatewayConfig gateway;             /* Identidad del gateway en el payload JSON */
+    HttpConfig api;                    /* Configuración HTTP POST */
     MqttConfig mqtt;                   /* Configuración MQTT (AWS IoT) */
     SendConfig send;                   /* Parámetros de envío y circuit breaker */
     char       primary_interface[8];   /* Interfaz principal: "api" o "mqtt" */

@@ -4,6 +4,11 @@
 #include <string.h>
 #include <curl/curl.h>
 
+void http_global_init(void)
+{
+    curl_global_init(CURL_GLOBAL_ALL);
+}
+
 /* Descarta el cuerpo de la respuesta HTTP — solo nos interesa el código */
 static size_t discard_response(void *ptr, size_t size, size_t nmemb, void *userdata)
 {
@@ -17,17 +22,6 @@ HttpResult http_post(const HttpConfig *cfg, const char *json_payload)
     if (!cfg->enabled)
         return HTTP_DISABLED;
 
-    /* Construir URL con query params */
-    char url[512];
-    int n = snprintf(url, sizeof(url),
-                     "%s?item_guid=%s&pull_type_guid=%s",
-                     cfg->base_url, cfg->item_guid, cfg->pull_type_guid);
-    if (n < 0 || (size_t)n >= sizeof(url))
-    {
-        fprintf(stderr, "[http] URL demasiado larga\n");
-        return HTTP_ERR_CURL;
-    }
-
     CURL *curl = curl_easy_init();
     if (curl == NULL)
     {
@@ -37,19 +31,13 @@ HttpResult http_post(const HttpConfig *cfg, const char *json_payload)
 
     /* Headers */
     struct curl_slist *headers = NULL;
-    char h_token[128], h_appid[128], h_sgid[128];
-
-    snprintf(h_token, sizeof(h_token), "scante_token: %s",  cfg->scante_token);
-    snprintf(h_appid, sizeof(h_appid), "scante_appid: %s",  cfg->scante_appid);
-    snprintf(h_sgid,  sizeof(h_sgid),  "scante_sgid: %s",   cfg->scante_sgid);
+    static char h_auth[2200];
+    snprintf(h_auth, sizeof(h_auth), "Authorization: Bearer %s", cfg->bearer_token);
 
     headers = curl_slist_append(headers, "Content-Type: application/json");
-    headers = curl_slist_append(headers, h_token);
-    headers = curl_slist_append(headers, h_appid);
-    headers = curl_slist_append(headers, "scante_utype: api_token");
-    headers = curl_slist_append(headers, h_sgid);
+    headers = curl_slist_append(headers, h_auth);
 
-    curl_easy_setopt(curl, CURLOPT_URL,            url);
+    curl_easy_setopt(curl, CURLOPT_URL,            cfg->base_url);
     curl_easy_setopt(curl, CURLOPT_POST,            1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS,      json_payload);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER,      headers);
@@ -58,7 +46,7 @@ HttpResult http_post(const HttpConfig *cfg, const char *json_payload)
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT,  10L);   /* 10 s conexión */
 
     /* TLS — solo si la URL usa HTTPS; HTTP plano no cambia */
-    if (strncmp(url, "https://", 8) == 0)
+    if (strncmp(cfg->base_url, "https://", 8) == 0)
     {
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);

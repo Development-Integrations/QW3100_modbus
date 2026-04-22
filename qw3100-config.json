@@ -1,9 +1,14 @@
 {
-    "interval_sec": 120,
+    "interval_sec": 12,
     "serial_port": "/dev/ttymxc2",
     "slave_id": 1,
     "persist_path":      "/SD/pending",
     "persist_sent_path": "/SD/sent",
+
+    "gateway": {
+        "name": "FLO-W9",
+        "sn": "0000"
+    },
 
     "web_interface": {
         "primary": "api"
@@ -11,25 +16,21 @@
 
     "api": {
         "enabled": true,
-        "base_url": "https://apiv4-integration.productious.com",
-        "item_guid": "<item_guid>",
-        "pull_type_guid": "<pull_type_guid>",
-        "scante_token": "<scante_token>",
-        "scante_appid": "<scante_appid>",
-        "scante_sgid": "<scante_sgid>",
-        "ca_bundle_path": ""
+        "base_url": "https://fleet.nebulae.com.co/api/external-system-gateway/rest/status",
+        "bearer_token": "",
+        "ca_bundle_path": "/usr/local/share/ca-certificates/isrgrootx1.pem"
     },
 
     "mqtt": {
-        "enabled":             false,
-        "broker_url":          "a2g1ow8hkm0df8-ats.iot.us-east-1.amazonaws.com",
-        "port":                8883,
-        "thing_name":          "<thing_name>",
-        "cert_path":           "/SD/certs/device.crt",
-        "key_path":            "/SD/certs/device.key",
-        "ca_path":             "/SD/certs/root-CA.crt",
+        "enabled": false,
+        "broker_url": "",
+        "port": 8883,
+        "thing_name": "",
+        "cert_path": "",
+        "key_path": "",
+        "ca_path": "",
         "connect_timeout_sec": 10,
-        "keepalive_sec":       60
+        "keepalive_sec": 60
     },
 
     "send": {

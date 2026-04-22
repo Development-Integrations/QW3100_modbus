@@ -82,9 +82,9 @@ typedef enum
 
 typedef struct
 {
-    char     name[32];   /* "AP2200-Gateway" */
-    uint32_t sn;         /* serial del gateway */
-    char     fw[16];     /* "1.20.3" */
+    char name[32];   /* nombre del gateway, ej: "FLO-W9" */
+    char sn[8];      /* serial como string, ej: "0000" */
+    char fw[16];     /* versión firmware, ej: "0.1.0" */
 } GatewayInfo;
 
 typedef struct

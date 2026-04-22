@@ -33,11 +33,6 @@
 #include "circuit_breaker.h"
 #include "logger.h"
 
-static const GatewayInfo gateway_info = {
-    "AP2200-Gateway",
-    100234,
-    "1.20.3"
-};
 
 /*
  * Determina la interfaz activa y el CB correspondiente según primary_interface
@@ -220,6 +215,16 @@ int main(int argc, char *argv[])
 
     config_print(&cfg);
 
+    GatewayInfo gw;
+    strncpy(gw.name, cfg.gateway.name, sizeof(gw.name) - 1);
+    gw.name[sizeof(gw.name) - 1] = '\0';
+    strncpy(gw.sn, cfg.gateway.sn, sizeof(gw.sn) - 1);
+    gw.sn[sizeof(gw.sn) - 1] = '\0';
+    strncpy(gw.fw, GATEWAY_FW_VERSION, sizeof(gw.fw) - 1);
+    gw.fw[sizeof(gw.fw) - 1] = '\0';
+
+    http_global_init();
+
     CircuitBreaker cb_api;
     CircuitBreaker cb_mqtt;
     cb_init(&cb_api);
@@ -325,7 +330,7 @@ int main(int argc, char *argv[])
 
         if (build_sensor_snapshot(dataSensor, dataSensor_count, now, &snapshot) == 0)
         {
-            payload_json = build_gateway_payload_json(&gateway_info, &snapshot);
+            payload_json = build_gateway_payload_json(&gw, &snapshot);
             if (payload_json != NULL)
             {
                 printf("%s\n", payload_json);

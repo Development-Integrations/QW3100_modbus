@@ -286,14 +286,45 @@ static void test_persist_write(void)
     rmdir(dir);
 }
 
+static void test_config_gateway_defaults(void)
+{
+    printf("\n=== TEST: Config gateway defaults ===\n");
+    AppConfig cfg;
+    config_init(&cfg);
+    ASSERT(strcmp(cfg.gateway.name, "FLO-W9") == 0, "gateway.name = FLO-W9 por defecto");
+    ASSERT(strcmp(cfg.gateway.sn,   "0000")   == 0, "gateway.sn = 0000 por defecto");
+}
+
+static void test_config_gateway_from_file(void)
+{
+    printf("\n=== TEST: Config gateway desde archivo ===\n");
+
+    const char *tmp = "/tmp/qw3100_test_gw.json";
+    FILE *f = fopen(tmp, "w");
+    if (f == NULL) { printf("  [SKIP] No se pudo crear archivo temporal\n"); return; }
+    fprintf(f, "{\"gateway\":{\"name\":\"FLO-W9-TEST\",\"sn\":\"1234\"}}");
+    fclose(f);
+
+    AppConfig cfg;
+    config_init(&cfg);
+    strncpy(cfg.config_path, tmp, sizeof(cfg.config_path) - 1);
+    ConfigFileResult r = config_load_file(&cfg);
+
+    ASSERT(r == CONFIG_FILE_OK,                              "gateway JSON leído OK");
+    ASSERT(strcmp(cfg.gateway.name, "FLO-W9-TEST") == 0,    "gateway.name = FLO-W9-TEST");
+    ASSERT(strcmp(cfg.gateway.sn,   "1234") == 0,           "gateway.sn = 1234");
+
+    remove(tmp);
+}
+
 static void test_config_api_defaults(void)
 {
     printf("\n=== TEST: Config api defaults ===\n");
     AppConfig cfg;
     config_init(&cfg);
-    ASSERT(cfg.api.enabled == 0,          "api.enabled = false por defecto");
-    ASSERT(cfg.api.base_url[0] == '\0',   "api.base_url vacío por defecto");
-    ASSERT(cfg.api.scante_token[0] == '\0', "api.scante_token vacío por defecto");
+    ASSERT(cfg.api.enabled == 0,              "api.enabled = false por defecto");
+    ASSERT(cfg.api.base_url[0] == '\0',       "api.base_url vacío por defecto");
+    ASSERT(cfg.api.bearer_token[0] == '\0',   "api.bearer_token vacío por defecto");
 }
 
 static void test_config_api_from_file(void)
@@ -307,12 +338,9 @@ static void test_config_api_from_file(void)
         "{"
         "\"api\":{"
           "\"enabled\":true,"
-          "\"base_url\":\"http://localhost:8080/IOTData\","
-          "\"item_guid\":\"guid-item\","
-          "\"pull_type_guid\":\"guid-pull\","
-          "\"scante_token\":\"tok123\","
-          "\"scante_appid\":\"app456\","
-          "\"scante_sgid\":\"sgid789\""
+          "\"base_url\":\"https://fleet.nebulae.com.co/api/external-system-gateway/rest/status\","
+          "\"bearer_token\":\"test-token-abc123\","
+          "\"ca_bundle_path\":\"/usr/local/share/ca-certificates/isrgrootx1.pem\""
         "}"
         "}");
     fclose(f);
@@ -322,13 +350,15 @@ static void test_config_api_from_file(void)
     strncpy(cfg.config_path, tmp, sizeof(cfg.config_path) - 1);
     ConfigFileResult r = config_load_file(&cfg);
 
-    ASSERT(r == CONFIG_FILE_OK,                                   "api JSON leído OK");
-    ASSERT(cfg.api.enabled == 1,                                  "api.enabled = true");
-    ASSERT(strcmp(cfg.api.base_url, "http://localhost:8080/IOTData") == 0, "api.base_url correcto");
-    ASSERT(strcmp(cfg.api.item_guid, "guid-item") == 0,          "api.item_guid correcto");
-    ASSERT(strcmp(cfg.api.scante_token, "tok123") == 0,          "api.scante_token correcto");
-    ASSERT(strcmp(cfg.api.scante_appid, "app456") == 0,          "api.scante_appid correcto");
-    ASSERT(strcmp(cfg.api.scante_sgid,  "sgid789") == 0,         "api.scante_sgid correcto");
+    ASSERT(r == CONFIG_FILE_OK,   "api JSON leído OK");
+    ASSERT(cfg.api.enabled == 1,  "api.enabled = true");
+    ASSERT(strcmp(cfg.api.base_url,
+                  "https://fleet.nebulae.com.co/api/external-system-gateway/rest/status") == 0,
+           "api.base_url correcto");
+    ASSERT(strcmp(cfg.api.bearer_token, "test-token-abc123") == 0, "api.bearer_token correcto");
+    ASSERT(strcmp(cfg.api.ca_bundle_path,
+                  "/usr/local/share/ca-certificates/isrgrootx1.pem") == 0,
+           "api.ca_bundle_path correcto");
 
     remove(tmp);
 }
@@ -586,6 +616,8 @@ int main(void)
     test_persist_move_to_sent();
     test_persist_rotate_sent_removes_excess();
     test_persist_rotate_sent_no_delete();
+    test_config_gateway_defaults();
+    test_config_gateway_from_file();
     test_config_api_defaults();
     test_config_api_from_file();
     test_http_post_disabled();

@@ -3,14 +3,10 @@
 
 typedef struct
 {
-    int  enabled;               /* 0 = skip sending */
+    int  enabled;                  /* 0 = skip sending */
     char base_url[256];
-    char item_guid[64];
-    char pull_type_guid[64];
-    char scante_token[64];
-    char scante_appid[64];
-    char scante_sgid[64];
-    char ca_bundle_path[256];   /* Ruta al CA bundle. Vacío = usar default del sistema */
+    char bearer_token[2048];
+    char ca_bundle_path[256];      /* Ruta al CA bundle. Vacío = usar default del sistema */
 } HttpConfig;
 
 typedef enum
@@ -24,10 +20,10 @@ typedef enum
 
 /*
  * Envía json_payload via HTTP POST al endpoint configurado en cfg.
- * Construye la URL con item_guid y pull_type_guid como query params.
- * Headers: scante_token, scante_appid, scante_utype=api_token, scante_sgid.
+ * Header: Authorization: Bearer <bearer_token>.
  * Retorna HttpResult según el código HTTP o error curl.
  */
+void      http_global_init(void);
 HttpResult http_post(const HttpConfig *cfg, const char *json_payload);
 
 #endif /* HTTP_SENDER_H */

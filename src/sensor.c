@@ -208,8 +208,8 @@ char *build_gateway_payload_json(const GatewayInfo *gw, const SensorSnapshot *sn
     }
 
     if ((cJSON_AddStringToObject(root, "name", gw->name) == NULL) ||
-        (cJSON_AddNumberToObject(root, "sn", gw->sn) == NULL) ||
-        (cJSON_AddStringToObject(root, "fw", gw->fw) == NULL))
+        (cJSON_AddStringToObject(root, "sn",   gw->sn)  == NULL) ||
+        (cJSON_AddStringToObject(root, "fw",   gw->fw)  == NULL))
     {
         cJSON_Delete(root);
         return NULL;

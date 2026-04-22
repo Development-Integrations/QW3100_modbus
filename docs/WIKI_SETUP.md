@@ -24,16 +24,18 @@ no existe.
 ```
 
 El script compila en orden:
-1. **OpenSSL** — base TLS para curl y mosquitto
-2. **libmodbus** — Modbus RTU, sin dependencias externas
-3. **libcurl** — con OpenSSL propio, sin zlib/nghttp2/brotli
-4. **libmosquitto** — con cJSON bundled, con OpenSSL propio
+1. **OpenSSL** — base TLS (`no-shared no-engine no-dso` — crítico para binario estático ARM)
+2. **c-ares** — resolver DNS sin glibc NSS (crítico para binario estático ARM)
+3. **libmodbus** — Modbus RTU, sin dependencias externas
+4. **libcurl** — con OpenSSL propio y `--enable-ares` para usar c-ares
+5. **libmosquitto** — con cJSON bundled, con OpenSSL propio
 
 Las fuentes se descargan a `_deps_build/` (gitignoreado). Los `.a` van a:
 
 ```
 third_party/arm/
 ├── openssl/    include/ + lib/libssl.a + lib/libcrypto.a
+├── cares/      include/ + lib/libcares.a
 ├── modbus/     include/modbus/ + lib/libmodbus.a
 ├── curl/       include/curl/  + lib/libcurl.a
 └── mosquitto/  include/mosquitto.h + lib/libmosquitto.a
@@ -41,12 +43,13 @@ third_party/arm/
 
 Verificar:
 ```bash
-find third_party/arm -name "*.a"
-# → third_party/arm/openssl/lib/libssl.a
-# → third_party/arm/openssl/lib/libcrypto.a
-# → third_party/arm/modbus/lib/libmodbus.a
+find third_party/arm -name "*.a" | sort
+# → third_party/arm/cares/lib/libcares.a
 # → third_party/arm/curl/lib/libcurl.a
+# → third_party/arm/modbus/lib/libmodbus.a
 # → third_party/arm/mosquitto/lib/libmosquitto.a
+# → third_party/arm/openssl/lib/libcrypto.a
+# → third_party/arm/openssl/lib/libssl.a
 ```
 
 ---

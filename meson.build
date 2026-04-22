@@ -38,11 +38,15 @@ if is_arm_cross
     dirs : tp_arm / 'openssl' / 'lib',
     static : true)
 
+  dep_cares = cc.find_library('cares',
+    dirs : tp_arm / 'cares' / 'lib',
+    static : true)
+
   inc_modbus    = include_directories('third_party/arm/modbus/include/modbus')
   inc_curl      = include_directories('third_party/arm/curl/include')
   inc_mosquitto = include_directories('third_party/arm/mosquitto/include')
 
-  all_deps = [dep_modbus, dep_curl, dep_mosquitto, dep_ssl, dep_crypto]
+  all_deps = [dep_modbus, dep_curl, dep_cares, dep_mosquitto, dep_ssl, dep_crypto]
   all_incs = [inc_modbus, inc_curl, inc_mosquitto]
 
 else

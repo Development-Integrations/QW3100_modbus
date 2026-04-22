@@ -45,6 +45,7 @@ STRIP="${HOST_TRIPLE}-strip"
 OPENSSL_VER="openssl-3.3.1"
 MODBUS_TAG="v3.1.10"
 CURL_VER="curl-8.8.0"
+CARES_VER="c-ares-1.33.1"
 MOSQUITTO_TAG="v2.0.18"
 
 # --- Prerequisitos ----------------------------------------------------------
@@ -53,6 +54,7 @@ need_cmd "$CC"   "gcc-arm-linux-gnueabihf"
 need_cmd "$CXX"  "g++-arm-linux-gnueabihf"
 need_cmd "$AR"   "binutils-arm-linux-gnueabihf"
 need_cmd cmake   "cmake"
+need_cmd autoreconf "autoconf"
 need_cmd git     "git"
 need_cmd make    "build-essential"
 need_cmd perl    "perl"
@@ -96,7 +98,7 @@ build_openssl() {
         --cross-compile-prefix="${HOST_TRIPLE}-" \
         --prefix="$PREFIX" \
         no-shared no-tests no-docs \
-        no-zlib no-comp no-engine
+        no-zlib no-comp no-engine no-dso
 
     make -j"$(nproc)" build_libs
     make install_dev     # solo headers + .a, sin binarios ni mans
@@ -106,7 +108,49 @@ build_openssl() {
 }
 
 # ============================================================================
-# 2. libmodbus
+# 2. c-ares  (DNS async sin glibc NSS — requerido para binarios estáticos ARM)
+# ============================================================================
+build_cares() {
+    local PREFIX="$TP/cares"
+    if [[ -f "$PREFIX/lib/libcares.a" ]]; then
+        log_warn "c-ares ya compilado → omitiendo"
+        return 0
+    fi
+
+    log_info "=== c-ares ==="
+    local SRC="$BUILD_ROOT/$CARES_VER"
+    local TARBALL="$BUILD_ROOT/${CARES_VER}.tar.gz"
+
+    if [[ ! -d "$SRC" ]]; then
+        if [[ ! -f "$TARBALL" ]]; then
+            log_info "Descargando $CARES_VER..."
+            curl -fsSL \
+                "https://github.com/c-ares/c-ares/releases/download/v1.33.1/${CARES_VER}.tar.gz" \
+                -o "$TARBALL"
+        fi
+        tar -xf "$TARBALL" -C "$BUILD_ROOT"
+    fi
+
+    local BUILD="$BUILD_ROOT/cares-build"
+    mkdir -p "$BUILD" "$PREFIX"
+    cd "$BUILD"
+
+    "$SRC/configure" \
+        --host="$HOST_TRIPLE" \
+        --prefix="$PREFIX" \
+        --enable-static --disable-shared \
+        --disable-tests \
+        CC="$CC" AR="$AR" RANLIB="$RANLIB"
+
+    make -j"$(nproc)"
+    make install
+
+    log_info "c-ares listo → $PREFIX"
+    cd "$REPO_ROOT"
+}
+
+# ============================================================================
+# 3. libmodbus
 # ============================================================================
 build_modbus() {
     local PREFIX="$TP/modbus"
@@ -145,7 +189,7 @@ build_modbus() {
 }
 
 # ============================================================================
-# 3. libcurl  (sin dependencias externas: no zlib, no nghttp2, no brotli...)
+# 4. libcurl  (con c-ares para DNS estático, sin otras dependencias extras)
 # ============================================================================
 build_curl() {
     local PREFIX="$TP/curl"
@@ -177,6 +221,7 @@ build_curl() {
         --prefix="$PREFIX" \
         --enable-static --disable-shared \
         --with-openssl="$TP/openssl" \
+        --enable-ares="$TP/cares" \
         --without-zlib \
         --without-nghttp2 \
         --without-brotli \
@@ -201,8 +246,8 @@ build_curl() {
         --disable-gopher \
         --disable-manual \
         CC="$CC" AR="$AR" RANLIB="$RANLIB" \
-        CPPFLAGS="-I$TP/openssl/include" \
-        LDFLAGS="-L$TP/openssl/lib"
+        CPPFLAGS="-I$TP/openssl/include -I$TP/cares/include" \
+        LDFLAGS="-L$TP/openssl/lib -L$TP/cares/lib"
 
     make -j"$(nproc)"
     make install
@@ -213,7 +258,7 @@ build_curl() {
 }
 
 # ============================================================================
-# 4. libmosquitto  (cJSON bundled, OpenSSL propio)
+# 5. libmosquitto  (cJSON bundled, OpenSSL propio)
 # ============================================================================
 build_mosquitto() {
     local PREFIX="$TP/mosquitto"
@@ -277,6 +322,7 @@ EOF
 # Main
 # ============================================================================
 build_openssl
+build_cares
 build_modbus
 build_curl
 build_mosquitto
